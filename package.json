@@ -1,0 +1,21 @@
+{
+  "name": "imagegencli",
+  "version": "0.1.0",
+  "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "description": "Provider-agnostic CLI for programmatic image generation.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @imagegencli/cli",
+    "build": "npm run build --workspace @imagegencli/cli",
+    "typecheck": "npm run typecheck --workspace @imagegencli/cli",
+    "test": "npm run test --workspace @imagegencli/core"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
