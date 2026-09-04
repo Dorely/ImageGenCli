@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAspect, parseSize, resolveAspect, resolveDefault, resolveNearestAspect, resolveNearestPixels } from "./image-size.js";
+import { parseAspect, parseSize, resolveAspect, resolveDefault, resolveNearestAspect, resolveNearestPixels, validateAspect } from "./image-size.js";
 
 describe("parseSize", () => {
   it("resolves auto and empty to the square default", () => {
@@ -7,14 +7,21 @@ describe("parseSize", () => {
     expect(parseSize("").size).toBe(resolveDefault().size);
   });
 
-  it("accepts exact valid rasters", () => {
-    expect(parseSize("1024x1024").size).toBe("1024x1024");
+  it("snaps arbitrary dimensions to the aspect-preserving valid raster", () => {
+    const exact = parseSize("1024x1024");
+    expect(exact.size).toBe("1024x1024");
+    const small = parseSize("100x100");
+    expect(small.width / small.height).toBeCloseTo(1, 3);
+    expect(small.width % 16).toBe(0);
+    const odd = parseSize("1000x500");
+    expect(odd.width / odd.height).toBeCloseTo(2, 2);
   });
 
-  it("rejects rasters outside provider limits", () => {
-    expect(() => parseSize("100x100")).toThrow(/divisible/);
-    expect(() => parseSize("4000x100")).toThrow(/divisible|exceed/);
-    expect(() => parseSize("4000x4000")).toThrow();
+  it("rejects only bad aspect ratios", () => {
+    expect(() => parseSize("4000x1000")).toThrow(/1:3/);
+    expect(() => parseSize("100x4000")).toThrow(/1:3/);
+    expect(() => parseSize("0x100")).toThrow(/positive/);
+    expect(() => parseSize("banana")).toThrow(/Invalid size/);
   });
 
   it("resolves presets and aspects to valid rasters", () => {
@@ -45,5 +52,12 @@ describe("resolveNearestPixels", () => {
 describe("resolveNearestAspect", () => {
   it("matches resolveAspect output", () => {
     expect(resolveNearestAspect(1).size).toBe(resolveAspect(1).size);
+  });
+});
+
+describe("validateAspect", () => {
+  it("accepts valid aspects and rejects the rest", () => {
+    expect(validateAspect(1024, 1024)).toBe(1);
+    expect(() => validateAspect(4000, 1000)).toThrow(/1:3/);
   });
 });

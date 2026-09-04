@@ -24,7 +24,9 @@ export interface EditRequest extends GenerateRequest {
 export interface GeneratedImage {
   data: Uint8Array;
   mimeType: string;
-  revisedPrompt?: string;
+  width: number;
+  height: number;
+  prompt: string;
   responseId?: string;
   callId?: string;
 }

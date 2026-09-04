@@ -1,4 +1,4 @@
-import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type OutputFormat, type ProviderResult } from "@imagegencli/core";
+import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type OutputFormat, type ProviderResult } from "@imagegencli/core";
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -33,9 +33,9 @@ function normalizeCount(count: number | undefined): number {
   return Math.min(MAX_IMAGE_COUNT, Math.max(MIN_IMAGE_COUNT, Math.trunc(count)));
 }
 
-function resolveSize(size: string | undefined): string {
+function resolveSize(size: string | undefined): ImageSize {
   try {
-    return parseSize(size ?? "auto").size;
+    return parseSize(size ?? "auto");
   } catch (error) {
     throw new ProviderError({
       kind: "usage",
@@ -123,17 +123,20 @@ export class CodexImageProvider {
   async generate(request: GenerateRequest): Promise<ProviderResult> {
     const model = this.requireModel();
     const format = normalizeOutputFormat(request.format);
+    const size = resolveSize(request.size);
     return this.runAll({
       format,
       count: normalizeCount(request.count),
       model,
+      prompt: request.prompt,
+      size,
       build: () =>
         buildPayload({
           model,
           prompt: request.prompt,
           references: request.referenceImages ?? [],
           tool: baseImageTool({
-            size: resolveSize(request.size),
+            size: size.size,
             quality: request.quality ?? DEFAULT_QUALITY,
             outputFormat: format,
             imageModel: this.imageModel,
@@ -147,14 +150,17 @@ export class CodexImageProvider {
   async edit(request: EditRequest): Promise<ProviderResult> {
     const model = this.requireModel();
     const format = normalizeOutputFormat(request.format);
+    const size = resolveSize(request.size);
     const references: ImageInput[] = [request.sourceImage, ...(request.referenceImages ?? [])];
     return this.runAll({
       format,
       count: normalizeCount(request.count),
       model,
+      prompt: request.prompt,
+      size,
       build: () => {
         const tool = baseImageTool({
-          size: resolveSize(request.size),
+          size: size.size,
           quality: request.quality ?? DEFAULT_QUALITY,
           outputFormat: format,
           imageModel: this.imageModel,
@@ -174,15 +180,15 @@ export class CodexImageProvider {
     });
   }
 
-  private async runAll(args: { format: OutputFormat; count: number; model: string; build: () => Record<string, unknown> }): Promise<ProviderResult> {
+  private async runAll(args: { format: OutputFormat; count: number; model: string; prompt: string; size: ImageSize; build: () => Record<string, unknown> }): Promise<ProviderResult> {
     const images: ProviderResult["images"] = [];
     for (let i = 0; i < args.count; i += 1) {
-      images.push(await this.sendOnce(args.build(), args.format));
+      images.push(await this.sendOnce(args.build(), args.format, args.prompt, args.size));
     }
     return { provider: this.name, model: args.model, imageModel: this.imageModel, images };
   }
 
-  private async sendOnce(payload: Record<string, unknown>, format: OutputFormat): Promise<ProviderResult["images"][number]> {
+  private async sendOnce(payload: Record<string, unknown>, format: OutputFormat, prompt: string, size: ImageSize): Promise<ProviderResult["images"][number]> {
     const accessToken = await this.tokens.getValidAccessToken();
     const accountId = extractAccountId(accessToken);
     const controller = new AbortController();
@@ -235,7 +241,9 @@ export class CodexImageProvider {
     return {
       data: parsed.data,
       mimeType: `image/${format}`,
-      revisedPrompt: parsed.revisedPrompt,
+      width: size.width,
+      height: size.height,
+      prompt,
       responseId: parsed.responseId,
       callId: parsed.callId,
     };

@@ -169,7 +169,9 @@ function printResult(result: ProviderResult, paths: string[]): void {
       images: result.images.map((image, i) => ({
         path: paths[i],
         mimeType: image.mimeType,
-        revisedPrompt: image.revisedPrompt,
+        width: image.width,
+        height: image.height,
+        prompt: image.prompt,
         responseId: image.responseId,
       })),
     })}\n`,

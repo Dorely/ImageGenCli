@@ -24,21 +24,12 @@ function toSize(width: number, height: number): ImageSize {
   return { width, height, size: `${width}x${height}`, pixels: width * height };
 }
 
-function validateRaster(width: number, height: number): void {
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0 || width % SIZE_MULTIPLE !== 0 || height % SIZE_MULTIPLE !== 0) {
-    throw new SizeError(`Image width and height must be positive integers divisible by ${SIZE_MULTIPLE}.`);
-  }
-  if (width > MAXIMUM_EDGE || height > MAXIMUM_EDGE) {
-    throw new SizeError(`Image edges cannot exceed ${MAXIMUM_EDGE} pixels.`);
-  }
-  const pixels = width * height;
-  if (pixels < MINIMUM_PIXELS || pixels > MAXIMUM_PIXELS) {
-    throw new SizeError(`Image size must contain ${MINIMUM_PIXELS.toLocaleString("en-US")}-${MAXIMUM_PIXELS.toLocaleString("en-US")} pixels.`);
-  }
-  const aspect = width / height;
-  if (aspect < 1 / MAXIMUM_ASPECT_RATIO || aspect > MAXIMUM_ASPECT_RATIO) {
-    throw new SizeError("Image aspect ratio must be between 1:3 and 3:1.");
-  }
+function targetAspect(width: number, height: number): number {
+  return validatedAspect(width / height);
+}
+
+export function validateAspect(width: number, height: number): number {
+  return targetAspect(width, height);
 }
 
 export function parseSize(value: string): ImageSize {
@@ -48,12 +39,9 @@ export function parseSize(value: string): ImageSize {
   if (normalized === "portrait") return resolveAspect(2 / 3);
   if (normalized === "landscape") return resolveAspect(3 / 2);
   if (normalized === "wide" || normalized === "widescreen") return resolveAspect(16 / 9);
-  const match = /^(\d+)\s*x\s*(\d+)$/.exec(normalized);
+  const match = /^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)$/.exec(normalized);
   if (match) {
-    const width = Number(match[1]);
-    const height = Number(match[2]);
-    validateRaster(width, height);
-    return toSize(width, height);
+    return resolveNearestPixels(Number(match[1]), Number(match[2]));
   }
   const aspect = parseAspect(normalized);
   return resolveNearestAspect(aspect);
@@ -123,7 +111,7 @@ export function resolveNearestPixels(width: number, height: number): ImageSize {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     throw new SizeError("Desired image pixels must be finite positive values.");
   }
-  const aspect = validatedAspect(width / height);
+  const aspect = targetAspect(width, height);
   const candidates: { width: number; height: number; aspectError: number; distance: number }[] = [];
   for (let candidateWidth = SIZE_MULTIPLE; candidateWidth <= MAXIMUM_EDGE; candidateWidth += SIZE_MULTIPLE) {
     const nearestHeight = Math.round(candidateWidth / aspect / SIZE_MULTIPLE) * SIZE_MULTIPLE;
