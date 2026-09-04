@@ -9,10 +9,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @imagegencli/cli",
+    "dev": "npm run dev --workspace imagegen",
     "build": "tsc -b --pretty false",
     "typecheck": "tsc -b --force --pretty false",
-    "test": "npm run test --workspace @imagegencli/core & npm run test --workspace @imagegencli/providers-codex"
+    "test": "npm run test --workspace @imagegencli/core & npm run test --workspace @imagegencli/providers-codex",
+    "release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/release.ps1",
+    "publish": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/publish-release.ps1"
   },
   "engines": {
     "node": ">=20.0.0",

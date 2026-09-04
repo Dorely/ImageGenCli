@@ -1,7 +1,7 @@
 {
-  "name": "@imagegencli/cli",
+  "name": "imagegen",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Provider-agnostic CLI for programmatic image generation.",
   "author": "Dorely",
@@ -14,10 +14,14 @@
   "bin": {
     "imagegen": "./dist/index.js"
   },
+  "files": [
+    "dist/**"
+  ],
   "scripts": {
     "dev": "npm run build && node ./dist/index.js",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@imagegencli/core": "0.1.0",
@@ -28,5 +32,9 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   }
 }

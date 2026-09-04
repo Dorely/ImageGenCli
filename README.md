@@ -1,11 +1,23 @@
 # ImageGenCli
 
+ImageGenCli is free to use. If it saves you time, you can [buy Dorely a coffee](https://buymeacoffee.com/dorely).
+
 ImageGenCli is a provider-agnostic command-line tool for programmatic image generation. It exposes a single stable CLI surface for creating images while keeping provider and auth details behind narrow contracts.
 
 ## Current Status
 
 - Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex Responses API (`gpt-image-2`).
 - Next: Google API-key provider, then additional providers behind the same contracts.
+
+## Install
+
+Published releases ship the `imagegen` npm package plus a matching GitHub Release tarball:
+
+```sh
+npm install -g imagegen
+```
+
+See [Releasing ImageGenCli](docs/releasing.md) for the version, tag, and publish workflow.
 
 ## Development prerequisites
 

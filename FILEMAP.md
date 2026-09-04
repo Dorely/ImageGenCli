@@ -20,11 +20,25 @@
 | `tsconfig.json` | Root TypeScript project references for editor and build graph alignment. |
 | `VISION.md` | High-level product vision, MVP scope, architecture direction, and success criteria. |
 
+## Documentation
+
+| File | Description |
+|------|-------------|
+| `docs/releasing.md` | Local Windows release, version/tag, and npm + GitHub publish workflow. |
+
+## Release Scripts
+
+| File | Description |
+|------|-------------|
+| `scripts/release.ps1` | Clean-tree, version, test, build, tarball, and SHA-256 gates for release candidates. |
+| `scripts/publish-release.ps1` | Tag, push, GitHub Release upload, and npm publish handoff for releases. |
+
 ## GitHub Configuration
 
 | File | Description |
 |------|-------------|
 | `.github/copilot-instructions.md` | Copilot-specific project instructions kept aligned with `AGENTS.md`. |
+| `.github/FUNDING.yml` | GitHub Sponsor-button configuration for the Buy Me a Coffee page. |
 
 ## CLI App
 
