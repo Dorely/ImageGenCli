@@ -2,6 +2,7 @@ import { normalizeOutputFormat, ProviderError, type EditRequest, type GenerateRe
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
+  DEFAULT_ORCHESTRATION_MODEL,
   DEFAULT_QUALITY,
   MAX_IMAGE_COUNT,
   MAX_REFERENCE_IMAGES,
@@ -91,7 +92,7 @@ export class CodexImageProvider {
     private readonly tokens: CodexTokenManager,
     options: CodexClientOptions = {},
   ) {
-    this.model = options.model ?? process.env["IMAGEGEN_CODEX_MODEL"] ?? "";
+    this.model = options.model ?? process.env["IMAGEGEN_CODEX_MODEL"] ?? DEFAULT_ORCHESTRATION_MODEL;
     this.imageModel = options.imageModel ?? process.env["IMAGEGEN_CODEX_IMAGE_MODEL"] ?? DEFAULT_IMAGE_MODEL;
     this.timeoutSeconds = options.timeoutSeconds ?? REQUEST_TIMEOUT_SECONDS;
     this.partialImages = options.partialImages ?? PARTIAL_IMAGES;

@@ -43,7 +43,7 @@ Login starts a temporary server on `localhost:1455`, opens the browser for Codex
 
 ## Configuration
 
-- `IMAGEGEN_CODEX_MODEL` — the Codex orchestration model configured for your account (required; no built-in default).
+- `IMAGEGEN_CODEX_MODEL` — optional override for the Codex orchestration model (default `gpt-5.6-luna`). This model executes the image toolcall and is part of the provider's request shape; it never rewrites the caller's prompt.
 - `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2`).
 - `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
 

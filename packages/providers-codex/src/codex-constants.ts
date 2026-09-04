@@ -8,6 +8,7 @@ export const DEFAULT_REDIRECT_URI = "http://localhost:1455/auth/callback";
 export const LOOPBACK_PORT = 1455;
 export const CALLBACK_PATH = "/auth/callback";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
+export const DEFAULT_ORCHESTRATION_MODEL = "gpt-5.6-luna";
 export const DEFAULT_QUALITY = "auto";
 export const DEFAULT_OUTPUT_FORMAT = "png";
 export const REQUEST_TIMEOUT_SECONDS = 600;
