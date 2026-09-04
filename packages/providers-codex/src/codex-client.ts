@@ -104,7 +104,7 @@ export class CodexImageProvider {
     private readonly tokens: CodexTokenManager,
     options: CodexClientOptions = {},
   ) {
-    this.mainlineModel = options.mainlineModel ?? process.env["IMAGEGEN_CODEX_MAINLINE_MODEL"] ?? "gpt-5.6";
+    this.mainlineModel = options.mainlineModel ?? process.env["IMAGEGEN_CODEX_MAINLINE_MODEL"] ?? "gpt-5.6-sol";
     this.imageModel = options.imageModel ?? process.env["IMAGEGEN_CODEX_IMAGE_MODEL"] ?? DEFAULT_IMAGE_MODEL;
     this.timeoutSeconds = options.timeoutSeconds ?? REQUEST_TIMEOUT_SECONDS;
     this.partialImages = options.partialImages ?? PARTIAL_IMAGES;
@@ -205,9 +205,10 @@ export class CodexImageProvider {
     if (!response.ok || !response.body) {
       const body = await response.text().catch(() => "");
       const kind = classifyImageError(body);
+      const detail = readErrorMessage(body);
       throw new ProviderError({
         kind,
-        message: `Codex image request returned ${response.status} (${kind}).`,
+        message: detail ? `Codex image request returned ${response.status} (${kind}): ${detail}` : `Codex image request returned ${response.status} (${kind}).`,
         statusCode: response.status,
         requestId,
       });
@@ -251,15 +252,29 @@ async function readSseLines(body: ReadableStream<Uint8Array>): Promise<string[]>
   return lines;
 }
 
+function readErrorMessage(body: string): string | null {
+  if (!body.trim()) return null;
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (typeof parsed === "object" && parsed !== null) {
+      const record = parsed as Record<string, unknown>;
+      if (typeof record["message"] === "string") return record["message"];
+      const error = record["error"];
+      if (typeof error === "object" && error !== null && typeof (error as Record<string, unknown>)["message"] === "string") {
+        return (error as Record<string, unknown>)["message"] as string;
+      }
+    }
+  } catch {
+    return body.slice(0, 500);
+  }
+  return null;
+}
+
 function toProviderError(error: unknown, requestId: string | undefined): ProviderError {
   const message = error instanceof Error ? error.message : String(error);
   const separator = message.indexOf(":");
   const kind = separator > 0 ? message.slice(0, separator) : "api_error";
   return new ProviderError({ kind, message, requestId });
-}
-
-export function preparedReferenceCount(request: Pick<GenerateRequest, "referenceImages">): number {
-  return request.referenceImages?.length ?? 0;
 }
 
 export { DEFAULT_OUTPUT_FORMAT, MAX_REFERENCE_IMAGES };
