@@ -43,15 +43,19 @@ npm test           # Run core and provider package tests
 ## Usage
 
 ```sh
-imagegen auth login
-imagegen auth status
+imagegen auth codex login
+imagegen auth codex status
+imagegen providers
 imagegen generate --prompt "a lighthouse at dawn" --out ./lighthouse.png
 imagegen generate --prompt "same lighthouse, dusk" --reference ./lighthouse.png --out ./dusk.png
+imagegen generate --prompt "same lighthouse, dusk" --provider codex --out ./dusk.png
 imagegen edit --prompt "add seagulls" --source ./lighthouse.png --out ./gulls.png
 imagegen help [command]
 ```
 
-Login starts a temporary server on `localhost:1455`, opens the browser for Codex OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth status --show-path`). `auth logout` removes them.
+Each provider has its own auth namespace (`auth codex ...`, later `auth gemini ...`); several can stay configured at once. `generate` and `edit` take a repeatable `--provider` flag: omit it when only one provider is configured, pass one or more names otherwise. Multi-provider runs write `<provider>-`-prefixed files and print one JSON result per provider.
+
+Codex login starts a temporary server on `localhost:1455`, opens the browser for OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth codex status --show-path`). `auth codex logout` removes them.
 
 ## Configuration
 

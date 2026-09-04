@@ -1,4 +1,4 @@
-import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type OutputFormat, type ProviderResult } from "@imagegencli/core";
+import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -93,7 +93,8 @@ function buildPayload(args: {
 
 export class CodexImageProvider {
   readonly name = PROVIDER_NAME;
-  private readonly model: string;
+  readonly sizePolicy: ImageSizePolicy = { resolveSize: (size) => resolveSize(size) };
+  private readonly orchestrationModel: string;
   private readonly imageModel: string;
   private readonly timeoutSeconds: number;
   private readonly partialImages: number;
@@ -103,36 +104,28 @@ export class CodexImageProvider {
     private readonly tokens: CodexTokenManager,
     options: CodexClientOptions = {},
   ) {
-    this.model = options.model ?? process.env["IMAGEGEN_CODEX_MODEL"] ?? DEFAULT_ORCHESTRATION_MODEL;
+    // API quirk: the Codex Responses endpoint requires an orchestration model
+    // field on every request even though the image_generation tool does all the
+    // work. This value never touches the caller's prompt and is not exposed in
+    // output; keep it in provider config, not in CLI surface or contracts.
+    this.orchestrationModel = options.model ?? process.env["IMAGEGEN_CODEX_MODEL"] ?? DEFAULT_ORCHESTRATION_MODEL;
     this.imageModel = options.imageModel ?? process.env["IMAGEGEN_CODEX_IMAGE_MODEL"] ?? DEFAULT_IMAGE_MODEL;
     this.timeoutSeconds = options.timeoutSeconds ?? REQUEST_TIMEOUT_SECONDS;
     this.partialImages = options.partialImages ?? PARTIAL_IMAGES;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  private requireModel(): string {
-    if (!this.model.trim()) {
-      throw new ProviderError({
-        kind: "configuration",
-        message: "Codex orchestration model is not configured. Set IMAGEGEN_CODEX_MODEL to the model your account uses for Codex responses.",
-      });
-    }
-    return this.model;
-  }
-
   async generate(request: GenerateRequest): Promise<ProviderResult> {
-    const model = this.requireModel();
     const format = normalizeOutputFormat(request.format);
-    const size = resolveSize(request.size);
+    const size = this.sizePolicy.resolveSize(request.size);
     return this.runAll({
       format,
       count: normalizeCount(request.count),
-      model,
       prompt: request.prompt,
       size,
       build: () =>
         buildPayload({
-          model,
+          model: this.orchestrationModel,
           prompt: request.prompt,
           references: request.referenceImages ?? [],
           tool: baseImageTool({
@@ -148,14 +141,12 @@ export class CodexImageProvider {
   }
 
   async edit(request: EditRequest): Promise<ProviderResult> {
-    const model = this.requireModel();
     const format = normalizeOutputFormat(request.format);
-    const size = resolveSize(request.size);
+    const size = this.sizePolicy.resolveSize(request.size);
     const references: ImageInput[] = [request.sourceImage, ...(request.referenceImages ?? [])];
     return this.runAll({
       format,
       count: normalizeCount(request.count),
-      model,
       prompt: request.prompt,
       size,
       build: () => {
@@ -171,7 +162,7 @@ export class CodexImageProvider {
           tool["input_image_mask"] = { image_url: toDataUrl(request.mask) };
         }
         return buildPayload({
-          model,
+          model: this.orchestrationModel,
           prompt: request.prompt,
           references,
           tool,
@@ -180,12 +171,12 @@ export class CodexImageProvider {
     });
   }
 
-  private async runAll(args: { format: OutputFormat; count: number; model: string; prompt: string; size: ImageSize; build: () => Record<string, unknown> }): Promise<ProviderResult> {
+  private async runAll(args: { format: OutputFormat; count: number; prompt: string; size: ImageSize; build: () => Record<string, unknown> }): Promise<ProviderResult> {
     const images: ProviderResult["images"] = [];
     for (let i = 0; i < args.count; i += 1) {
       images.push(await this.sendOnce(args.build(), args.format, args.prompt, args.size));
     }
-    return { provider: this.name, model: args.model, imageModel: this.imageModel, images };
+    return { provider: this.name, imageModel: this.imageModel, images };
   }
 
   private async sendOnce(payload: Record<string, unknown>, format: OutputFormat, prompt: string, size: ImageSize): Promise<ProviderResult["images"][number]> {

@@ -7,14 +7,15 @@ import {
   MIN_IMAGE_COUNT,
   normalizeOutputFormat,
   ProviderError,
+  ProviderRegistry,
   type EditRequest,
   type GenerateRequest,
   type ImageInput,
+  type ProviderEntry,
   type ProviderResult,
 } from "@imagegencli/core";
 import {
-  CodexImageProvider,
-  CodexTokenManager,
+  createCodexEntry,
   DEFAULT_REDIRECT_URI,
   LOOPBACK_PORT,
   PROVIDER_NAME,
@@ -24,6 +25,7 @@ import {
   resolveTokenStore,
   startPkceFlow,
   waitForOAuthCallback,
+  CodexTokenManager,
 } from "@imagegencli/providers-codex";
 import { helpFor } from "./help.js";
 
@@ -52,12 +54,12 @@ function parseArgs(argv: string[]): { flags: Map<string, string | boolean | stri
         flags.set(key, true);
         continue;
       }
-      if (key === "reference") {
+      if (key === "reference" || key === "provider") {
         const value = argv[i + 1];
-        if (!value || value.startsWith("--")) fail("usage", "Missing value for --reference.", EXIT_USAGE);
+        if (!value || value.startsWith("--")) fail("usage", `Missing value for --${key}.`, EXIT_USAGE);
         i += 1;
-        const existing = flags.get("reference");
-        flags.set("reference", [...(Array.isArray(existing) ? existing : []), value]);
+        const existing = flags.get(key);
+        flags.set(key, [...(Array.isArray(existing) ? existing : []), value]);
         continue;
       }
       const value = argv[i + 1];
@@ -139,7 +141,19 @@ function parseCount(flags: Map<string, string | boolean | string[]>): number {
   return count;
 }
 
-async function resolveOutPaths(out: string, count: number, format: string): Promise<string[]> {
+function registry(): ProviderRegistry {
+  const registry = new ProviderRegistry();
+  registry.register(createCodexEntry());
+  return registry;
+}
+
+function requestedProviders(flags: Map<string, string | boolean | string[]>): string[] | undefined {
+  const raw = flags.get("provider");
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  return raw;
+}
+
+async function resolveOutPaths(out: string, providerName: string, multiProvider: boolean, count: number, format: string): Promise<string[]> {
   const resolved = resolve(out);
   let isDir = false;
   try {
@@ -149,22 +163,22 @@ async function resolveOutPaths(out: string, count: number, format: string): Prom
     isDir = extname(resolved) === "";
   }
   const extension = `.${normalizeOutputFormat(format)}`;
+  const prefix = multiProvider ? `${providerName}-` : "";
   if (isDir) {
-    return Array.from({ length: count }, (_, i) => join(resolved, `image-${i + 1}${extension}`));
+    return Array.from({ length: count }, (_, i) => join(resolved, `${prefix}image-${i + 1}${extension}`));
   }
-  if (count > 1) {
+  if (count > 1 || multiProvider) {
     const dir = dirname(resolved);
     const base = basename(resolved, extname(resolved));
-    return Array.from({ length: count }, (_, i) => join(dir, `${base}-${i + 1}${extension}`));
+    return Array.from({ length: count }, (_, i) => join(dir, `${prefix}${base}-${i + 1}${extension}`));
   }
   return [resolved.endsWith(extension) ? resolved : `${resolved}${extension}`];
 }
 
-function printResult(result: ProviderResult, paths: string[]): void {
+function printResult(providerName: string, result: ProviderResult, paths: string[]): void {
   process.stdout.write(
     `${JSON.stringify({
-      provider: result.provider,
-      model: result.model,
+      provider: providerName,
       imageModel: result.imageModel,
       images: result.images.map((image, i) => ({
         path: paths[i],
@@ -190,7 +204,10 @@ async function saveImages(result: ProviderResult, paths: string[]): Promise<void
   }
 }
 
-async function runAuthLogin(flags: Map<string, string | boolean | string[]>): Promise<void> {
+async function runAuthLogin(providerName: string, flags: Map<string, string | boolean | string[]>): Promise<void> {
+  if (providerName !== PROVIDER_NAME) {
+    fail("usage", `Unknown auth provider "${providerName}". Available: ${registry().describe()}.`, EXIT_USAGE);
+  }
   const uri = redirectUri();
   const port = redirectPort(uri);
   const timeoutMinutes = Number(flagValue(flags, "timeout") ?? "10");
@@ -215,9 +232,9 @@ async function runAuthLogin(flags: Map<string, string | boolean | string[]>): Pr
     if (error instanceof LoopbackError) fail("auth", error.message, EXIT_AUTH);
     throw error;
   }
-  if (callback.state !== state) fail("auth", "OAuth state mismatch. Retry `imagegen auth login`.", EXIT_AUTH);
+  if (callback.state !== state) fail("auth", "OAuth state mismatch. Retry `imagegen auth codex login`.", EXIT_AUTH);
   const verifier = consumeVerifier(state);
-  if (!verifier) fail("auth", "OAuth flow expired. Retry `imagegen auth login`.", EXIT_AUTH);
+  if (!verifier) fail("auth", "OAuth flow expired. Retry `imagegen auth codex login`.", EXIT_AUTH);
   const store = await resolveTokenStore();
   if (store.describe().backend === "file") {
     process.stderr.write("Warning: OS vault unavailable; tokens stored in a restricted file. Use `auth status --show-path` to inspect.\n");
@@ -232,7 +249,20 @@ async function runAuthLogin(flags: Map<string, string | boolean | string[]>): Pr
   process.stdout.write(`${JSON.stringify({ provider: PROVIDER_NAME, status: "connected" })}\n`);
 }
 
-async function runAuthStatus(flags: Map<string, string | boolean | string[]>): Promise<void> {
+async function runProviders(): Promise<void> {
+  const entries = registry().names().map((name) => registry().get(name));
+  const providers = [];
+  for (const entry of entries) {
+    const status = await entry.authStatus();
+    providers.push({ name: status.name, configured: status.configured });
+  }
+  process.stdout.write(`${JSON.stringify({ providers })}\n`);
+}
+
+async function runAuthStatus(providerName: string, flags: Map<string, string | boolean | string[]>): Promise<void> {
+  if (providerName !== PROVIDER_NAME) {
+    fail("usage", `Unknown auth provider "${providerName}". Available: ${registry().describe()}.`, EXIT_USAGE);
+  }
   const store = await resolveTokenStore();
   const manager = new CodexTokenManager(store);
   const status = await manager.status();
@@ -245,15 +275,13 @@ async function runAuthStatus(flags: Map<string, string | boolean | string[]>): P
   process.stdout.write(`${JSON.stringify(output)}\n`);
 }
 
-async function runAuthLogout(): Promise<void> {
+async function runAuthLogout(providerName: string): Promise<void> {
+  if (providerName !== PROVIDER_NAME) {
+    fail("usage", `Unknown auth provider "${providerName}". Available: ${registry().describe()}.`, EXIT_USAGE);
+  }
   const store = await resolveTokenStore();
   await store.clear(PROVIDER_NAME);
   process.stdout.write(`${JSON.stringify({ provider: PROVIDER_NAME, status: "disconnected" })}\n`);
-}
-
-async function provider(): Promise<CodexImageProvider> {
-  const store = await resolveTokenStore();
-  return new CodexImageProvider(new CodexTokenManager(store));
 }
 
 async function runGenerate(flags: Map<string, string | boolean | string[]>): Promise<void> {
@@ -261,6 +289,7 @@ async function runGenerate(flags: Map<string, string | boolean | string[]>): Pro
   const out = flagValue(flags, "out");
   if (!prompt) fail("usage", "Missing required --prompt.", EXIT_USAGE);
   if (!out) fail("usage", "Missing required --out.", EXIT_USAGE);
+  const providers = await resolveProviders(requestedProviders(flags));
   const request: GenerateRequest = {
     prompt,
     out,
@@ -270,7 +299,15 @@ async function runGenerate(flags: Map<string, string | boolean | string[]>): Pro
     count: parseCount(flags),
     referenceImages: await loadReferences(flags),
   };
-  await runImageRequest(request, undefined);
+  await runImageRequest(request, undefined, providers);
+}
+
+async function resolveProviders(requested: string[] | undefined): Promise<ProviderEntry[]> {
+  try {
+    return await registry().resolve(requested);
+  } catch (error) {
+    fail("usage", error instanceof Error ? error.message : String(error), EXIT_USAGE);
+  }
 }
 
 async function runEdit(flags: Map<string, string | boolean | string[]>): Promise<void> {
@@ -292,25 +329,27 @@ async function runEdit(flags: Map<string, string | boolean | string[]>): Promise
     sourceImage: await loadImageInput(source, "Source image"),
     mask: mask ? await loadImageInput(mask, "Mask image") : undefined,
   };
-  await runImageRequest(request, request);
+  await runImageRequest(request, request, await resolveProviders(requestedProviders(flags)));
 }
 
-async function runImageRequest(request: GenerateRequest, edit: EditRequest | undefined): Promise<void> {
-  const imageProvider = await provider();
-  let result: ProviderResult;
-  try {
-    result = edit ? await imageProvider.edit(edit) : await imageProvider.generate(request);
-  } catch (error) {
-    if (error instanceof ReauthRequiredError) fail("auth", error.message, EXIT_AUTH);
-    if (error instanceof ProviderError) {
-      if (error.kind === "configuration" || error.kind === "usage") fail(error.kind, error.message, EXIT_USAGE);
-      fail("provider", `${error.kind}: ${error.message}`, EXIT_PROVIDER);
+async function runImageRequest(request: GenerateRequest, edit: EditRequest | undefined, providers: ProviderEntry[]): Promise<void> {
+  const multiProvider = providers.length > 1;
+  for (const entry of providers) {
+    let result: ProviderResult;
+    try {
+      result = edit ? await entry.provider.edit(edit) : await entry.provider.generate(request);
+    } catch (error) {
+      if (error instanceof ReauthRequiredError) fail("auth", `${entry.provider.name}: ${error.message}`, EXIT_AUTH);
+      if (error instanceof ProviderError) {
+        if (error.kind === "configuration" || error.kind === "usage") fail(error.kind, `${entry.provider.name}: ${error.message}`, EXIT_USAGE);
+        fail("provider", `${entry.provider.name}: ${error.kind}: ${error.message}`, EXIT_PROVIDER);
+      }
+      throw error;
     }
-    throw error;
+    const paths = await resolveOutPaths(request.out, entry.provider.name, multiProvider, result.images.length, request.format ?? "png");
+    await saveImages(result, paths);
+    printResult(entry.provider.name, result, paths);
   }
-  const paths = await resolveOutPaths(request.out, result.images.length, request.format ?? "png");
-  await saveImages(result, paths);
-  printResult(result, paths);
 }
 
 async function main(): Promise<void> {
@@ -319,23 +358,32 @@ async function main(): Promise<void> {
     process.stdout.write(helpFor(positionals[0]));
     return;
   }
-  const [command, sub] = positionals;
+  const [command, sub, subSub] = positionals;
   try {
     if (command === "help") {
       process.stdout.write(helpFor(sub));
       return;
     }
-    if (command === "auth" && sub === "login") {
-      await runAuthLogin(flags);
+    if (command === "providers" && !sub) {
+      await runProviders();
       return;
     }
-    if (command === "auth" && sub === "status") {
-      await runAuthStatus(flags);
-      return;
+    if (command === "auth" && sub && !subSub) {
+      fail("usage", `Missing auth action. Usage: imagegen auth ${sub} login|status|logout.`, EXIT_USAGE);
     }
-    if (command === "auth" && sub === "logout") {
-      await runAuthLogout();
-      return;
+    if (command === "auth" && sub) {
+      if (subSub === "login") {
+        await runAuthLogin(sub, flags);
+        return;
+      }
+      if (subSub === "status") {
+        await runAuthStatus(sub, flags);
+        return;
+      }
+      if (subSub === "logout") {
+        await runAuthLogout(sub);
+        return;
+      }
     }
     if (command === "generate" && !sub) {
       await runGenerate(flags);

@@ -33,7 +33,6 @@ export interface GeneratedImage {
 
 export interface ProviderResult {
   provider: string;
-  model: string;
   imageModel: string;
   images: GeneratedImage[];
 }

@@ -57,7 +57,9 @@
 | `packages/core/tsconfig.json` | TypeScript project settings for the core package. |
 | `packages/core/src/index.ts` | Core package barrel exports for contracts and shared helpers. |
 | `packages/core/src/types.ts` | Provider-neutral image request/result/error types and limits. |
-| `packages/core/src/image-provider.ts` | `IImageProvider` contract for generate/edit. |
+| `packages/core/src/image-provider.ts` | `IImageProvider` contract with per-provider size policy. |
+| `packages/core/src/provider-registry.ts` | Provider registry: routing, configured detection, multi-select. |
+| `packages/core/src/provider-registry.test.ts` | Regression tests for provider resolution. |
 | `packages/core/src/token-store.ts` | `TokenSet`/`ITokenStore` contract for credential persistence. |
 | `packages/core/src/format.ts` | Output-format normalization and MIME helpers. |
 | `packages/core/src/format.test.ts` | Regression tests for format helpers. |
@@ -82,5 +84,6 @@
 | `packages/providers-codex/src/account-id.ts` | ChatGPT account-id extraction from the access JWT. |
 | `packages/providers-codex/src/account-id.test.ts` | Regression tests for account-id extraction. |
 | `packages/providers-codex/src/codex-client.ts` | Responses API image provider (generate/edit, streaming). |
+| `packages/providers-codex/src/codex-entry.ts` | Registry entry wiring the Codex provider and auth status. |
 | `packages/providers-codex/src/sse.ts` | SSE parsing and image-error classification. |
 | `packages/providers-codex/src/sse.test.ts` | Regression tests for SSE parsing and error kinds. |

@@ -1,21 +1,23 @@
 export const USAGE = `imagegen - provider-agnostic image generation CLI
 
 Usage:
-  imagegen auth login [--timeout <minutes>] [--no-open]
-  imagegen auth status [--show-path]
-  imagegen auth logout
-  imagegen generate --prompt <text> --out <path|dir> [options]
-  imagegen edit --prompt <text> --source <file> [--mask <file>] --out <path|dir> [options]
+  imagegen auth codex login [--timeout <minutes>] [--no-open]
+  imagegen auth codex status [--show-path]
+  imagegen auth codex logout
+  imagegen generate --prompt <text> --out <path|dir> [--provider <name>] [options]
+  imagegen edit --prompt <text> --source <file> [--mask <file>] --out <path|dir> [--provider <name>] [options]
+  imagegen providers
   imagegen help [command]
 
 Image options (generate, edit):
   --prompt <text>        Prompt text (required)
   --out <path|dir>       Output file or directory (required)
+  --provider <name>      Repeatable. Defaults to the only configured provider;
+                         required when several are configured.
   --reference <file>     Reference image for continuity (repeatable, max 4)
   --size <size>          auto, WIDTHxHEIGHT, aspect (16:9), or preset
-                     square, portrait, landscape, wide (any size snaps to
-                     the nearest valid raster keeping its aspect ratio;
-                     only 1:3-3:1 aspects are rejected)
+                     square, portrait, landscape, wide (validated per
+                     provider; bad aspects are rejected)
   --quality <quality>    Quality hint (provider-specific, default auto)
   --format <format>      png, jpeg, or webp (default png)
   --count <n>            Number of images, 1-4 (default 1)
@@ -30,47 +32,55 @@ Global:
 `;
 
 const COMMAND_HELP: Record<string, string> = {
-  auth: `imagegen auth - manage provider credentials
+  auth: `imagegen auth - manage provider credentials (one namespace per provider)
 
 Usage:
-  imagegen auth login [--timeout <minutes>] [--no-open]
-  imagegen auth status [--show-path]
-  imagegen auth logout
+  imagegen auth codex login [--timeout <minutes>] [--no-open]
+  imagegen auth codex status [--show-path]
+  imagegen auth codex logout
 `,
-  login: `imagegen auth login - connect Codex via browser OAuth
+  login: `imagegen auth codex login - connect Codex via browser OAuth
 
 Usage:
-  imagegen auth login [--timeout <minutes>] [--no-open]
+  imagegen auth codex login [--timeout <minutes>] [--no-open]
 
 Starts a temporary localhost callback server, opens the browser,
 exchanges the code, and stores tokens in the OS vault (file fallback).
 `,
-  status: `imagegen auth status - show Codex connection state
+  status: `imagegen auth codex status - show Codex connection state
 
 Usage:
-  imagegen auth status [--show-path]
+  imagegen auth codex status [--show-path]
 
 Prints JSON without secrets. --show-path reveals the token location.
 `,
-  logout: `imagegen auth logout - remove stored Codex credentials
+  logout: `imagegen auth codex logout - remove stored Codex credentials
 
 Usage:
-  imagegen auth logout
+  imagegen auth codex logout
 `,
   generate: `imagegen generate - create images from a prompt
 
 Usage:
-  imagegen generate --prompt <text> --out <path|dir> [options]
+  imagegen generate --prompt <text> --out <path|dir> [--provider <name>] [options]
 
-Options: --reference <file> (repeatable, max 4), --size, --quality,
+Options: --provider <name> (repeatable; run on several providers),
+--reference <file> (repeatable, max 4), --size, --quality,
 --format png|jpeg|webp, --count 1-4.
 `,
   edit: `imagegen edit - edit a source image with a prompt
 
 Usage:
-  imagegen edit --prompt <text> --source <file> [--mask <file>] --out <path|dir> [options]
+  imagegen edit --prompt <text> --source <file> [--mask <file>] --out <path|dir> [--provider <name>] [options]
 
 Same image options as generate.
+`,
+  providers: `imagegen providers - list registered and configured providers
+
+Usage:
+  imagegen providers
+
+Prints JSON with each provider and whether it is configured.
 `,
   help: `imagegen help - show human-readable usage
 
