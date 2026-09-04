@@ -2,7 +2,6 @@ import { normalizeOutputFormat, ProviderError, type EditRequest, type GenerateRe
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
-  DEFAULT_OUTPUT_FORMAT,
   DEFAULT_QUALITY,
   MAX_IMAGE_COUNT,
   MAX_REFERENCE_IMAGES,
@@ -17,7 +16,7 @@ import type { CodexTokenManager } from "./codex-token-manager.js";
 import { classifyImageError, parseImageStreamEvents } from "./sse.js";
 
 export interface CodexClientOptions {
-  mainlineModel?: string;
+  model?: string;
   imageModel?: string;
   timeoutSeconds?: number;
   partialImages?: number;
@@ -61,8 +60,7 @@ function baseImageTool(args: {
 }
 
 function buildPayload(args: {
-  mainlineModel: string;
-  instructions: string;
+  model: string;
   prompt: string;
   references: ImageInput[];
   tool: Record<string, unknown>;
@@ -72,8 +70,7 @@ function buildPayload(args: {
     content.push({ type: "input_image", image_url: toDataUrl(reference), detail: "auto" });
   }
   return {
-    model: args.mainlineModel,
-    instructions: args.instructions,
+    model: args.model,
     input: [{ role: "user", content }],
     tools: [args.tool],
     tool_choice: { type: "image_generation" },
@@ -82,19 +79,9 @@ function buildPayload(args: {
   };
 }
 
-const GENERATE_INSTRUCTIONS =
-  "Use the image_generation tool to create one image from the standalone prompt. " +
-  "Supplied input images are visual continuity references, not edit canvases: preserve the character identity, design, " +
-  "palette, medium, and style assigned to each reference by the prompt unless it requests a redesign or style break.";
-
-const EDIT_INSTRUCTIONS =
-  "Use the image_generation tool to render one coherent complete edit from the first supplied image as the visual " +
-  "starting point. Make the requested changes while preserving the source's explicitly requested identity, style, and " +
-  "composition continuity. Treat additional supplied images as references only.";
-
 export class CodexImageProvider {
   readonly name = PROVIDER_NAME;
-  private readonly mainlineModel: string;
+  private readonly model: string;
   private readonly imageModel: string;
   private readonly timeoutSeconds: number;
   private readonly partialImages: number;
@@ -104,22 +91,33 @@ export class CodexImageProvider {
     private readonly tokens: CodexTokenManager,
     options: CodexClientOptions = {},
   ) {
-    this.mainlineModel = options.mainlineModel ?? process.env["IMAGEGEN_CODEX_MAINLINE_MODEL"] ?? "gpt-5.6-sol";
+    this.model = options.model ?? process.env["IMAGEGEN_CODEX_MODEL"] ?? "";
     this.imageModel = options.imageModel ?? process.env["IMAGEGEN_CODEX_IMAGE_MODEL"] ?? DEFAULT_IMAGE_MODEL;
     this.timeoutSeconds = options.timeoutSeconds ?? REQUEST_TIMEOUT_SECONDS;
     this.partialImages = options.partialImages ?? PARTIAL_IMAGES;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
+  private requireModel(): string {
+    if (!this.model.trim()) {
+      throw new ProviderError({
+        kind: "configuration",
+        message: "Codex orchestration model is not configured. Set IMAGEGEN_CODEX_MODEL to the model your account uses for Codex responses.",
+      });
+    }
+    return this.model;
+  }
+
   async generate(request: GenerateRequest): Promise<ProviderResult> {
+    const model = this.requireModel();
     const format = normalizeOutputFormat(request.format);
     return this.runAll({
       format,
       count: normalizeCount(request.count),
+      model,
       build: () =>
         buildPayload({
-          mainlineModel: this.mainlineModel,
-          instructions: GENERATE_INSTRUCTIONS,
+          model,
           prompt: request.prompt,
           references: request.referenceImages ?? [],
           tool: baseImageTool({
@@ -135,11 +133,13 @@ export class CodexImageProvider {
   }
 
   async edit(request: EditRequest): Promise<ProviderResult> {
+    const model = this.requireModel();
     const format = normalizeOutputFormat(request.format);
     const references: ImageInput[] = [request.sourceImage, ...(request.referenceImages ?? [])];
     return this.runAll({
       format,
       count: normalizeCount(request.count),
+      model,
       build: () => {
         const tool = baseImageTool({
           size: request.size,
@@ -153,8 +153,7 @@ export class CodexImageProvider {
           tool["input_image_mask"] = { image_url: toDataUrl(request.mask) };
         }
         return buildPayload({
-          mainlineModel: this.mainlineModel,
-          instructions: EDIT_INSTRUCTIONS,
+          model,
           prompt: request.prompt,
           references,
           tool,
@@ -163,12 +162,12 @@ export class CodexImageProvider {
     });
   }
 
-  private async runAll(args: { format: OutputFormat; count: number; build: () => Record<string, unknown> }): Promise<ProviderResult> {
+  private async runAll(args: { format: OutputFormat; count: number; model: string; build: () => Record<string, unknown> }): Promise<ProviderResult> {
     const images: ProviderResult["images"] = [];
     for (let i = 0; i < args.count; i += 1) {
       images.push(await this.sendOnce(args.build(), args.format));
     }
-    return { provider: this.name, mainlineModel: this.mainlineModel, imageModel: this.imageModel, images };
+    return { provider: this.name, model: args.model, imageModel: this.imageModel, images };
   }
 
   private async sendOnce(payload: Record<string, unknown>, format: OutputFormat): Promise<ProviderResult["images"][number]> {
@@ -259,6 +258,7 @@ function readErrorMessage(body: string): string | null {
     if (typeof parsed === "object" && parsed !== null) {
       const record = parsed as Record<string, unknown>;
       if (typeof record["message"] === "string") return record["message"];
+      if (typeof record["detail"] === "string") return record["detail"];
       const error = record["error"];
       if (typeof error === "object" && error !== null && typeof (error as Record<string, unknown>)["message"] === "string") {
         return (error as Record<string, unknown>)["message"] as string;
@@ -276,5 +276,3 @@ function toProviderError(error: unknown, requestId: string | undefined): Provide
   const kind = separator > 0 ? message.slice(0, separator) : "api_error";
   return new ProviderError({ kind, message, requestId });
 }
-
-export { DEFAULT_OUTPUT_FORMAT, MAX_REFERENCE_IMAGES };

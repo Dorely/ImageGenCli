@@ -164,7 +164,8 @@ function printResult(result: ProviderResult, paths: string[]): void {
   process.stdout.write(
     `${JSON.stringify({
       provider: result.provider,
-      models: { mainline: result.mainlineModel, image: result.imageModel },
+      model: result.model,
+      imageModel: result.imageModel,
       images: result.images.map((image, i) => ({
         path: paths[i],
         mimeType: image.mimeType,
@@ -300,8 +301,8 @@ async function runImageRequest(request: GenerateRequest, edit: EditRequest | und
   } catch (error) {
     if (error instanceof ReauthRequiredError) fail("auth", error.message, EXIT_AUTH);
     if (error instanceof ProviderError) {
-      const exitCode = error.kind.includes("rate_limit") ? EXIT_PROVIDER : EXIT_PROVIDER;
-      fail("provider", `${error.kind}: ${error.message}`, exitCode);
+      if (error.kind === "configuration") fail(error.kind, error.message, EXIT_USAGE);
+      fail("provider", `${error.kind}: ${error.message}`, EXIT_PROVIDER);
     }
     throw error;
   }

@@ -41,6 +41,14 @@ imagegen help [command]
 
 Login starts a temporary server on `localhost:1455`, opens the browser for Codex OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth status --show-path`). `auth logout` removes them.
 
+## Configuration
+
+- `IMAGEGEN_CODEX_MODEL` — the Codex orchestration model configured for your account (required; no built-in default).
+- `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2`).
+- `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
+
+The tool is a passthrough: prompts and reference images come from the caller verbatim; the CLI adds no prompt content of its own.
+
 ## Architecture
 
 ImageGenCli follows the architecture direction in `VISION.md`:
