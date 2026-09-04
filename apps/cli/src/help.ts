@@ -12,7 +12,9 @@ Image options (generate, edit):
   --prompt <text>        Prompt text (required)
   --out <path|dir>       Output file or directory (required)
   --reference <file>     Reference image for continuity (repeatable, max 4)
-  --size <size>          Image size, e.g. auto, 1024x1024, 1536x1024
+  --size <size>          auto, WIDTHxHEIGHT, aspect (16:9), or preset
+                     square, portrait, landscape, wide (normalized to
+                     provider limits: 16px multiples, 1:3-3:1 aspect)
   --quality <quality>    Quality hint (provider-specific, default auto)
   --format <format>      png, jpeg, or webp (default png)
   --count <n>            Number of images, 1-4 (default 1)

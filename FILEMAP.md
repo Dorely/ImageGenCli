@@ -47,6 +47,8 @@
 | `packages/core/src/token-store.ts` | `TokenSet`/`ITokenStore` contract for credential persistence. |
 | `packages/core/src/format.ts` | Output-format normalization and MIME helpers. |
 | `packages/core/src/format.test.ts` | Regression tests for format helpers. |
+| `packages/core/src/image-size.ts` | Size parsing, validation, and provider-limit raster normalization. |
+| `packages/core/src/image-size.test.ts` | Regression tests for size helpers. |
 
 ## Codex Provider Package
 

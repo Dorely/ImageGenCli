@@ -301,7 +301,7 @@ async function runImageRequest(request: GenerateRequest, edit: EditRequest | und
   } catch (error) {
     if (error instanceof ReauthRequiredError) fail("auth", error.message, EXIT_AUTH);
     if (error instanceof ProviderError) {
-      if (error.kind === "configuration") fail(error.kind, error.message, EXIT_USAGE);
+      if (error.kind === "configuration" || error.kind === "usage") fail(error.kind, error.message, EXIT_USAGE);
       fail("provider", `${error.kind}: ${error.message}`, EXIT_PROVIDER);
     }
     throw error;

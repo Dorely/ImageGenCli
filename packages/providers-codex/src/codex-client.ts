@@ -1,4 +1,4 @@
-import { normalizeOutputFormat, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type OutputFormat, type ProviderResult } from "@imagegencli/core";
+import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type OutputFormat, type ProviderResult } from "@imagegencli/core";
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -31,6 +31,17 @@ function toDataUrl(image: ImageInput): string {
 function normalizeCount(count: number | undefined): number {
   if (!count) return 1;
   return Math.min(MAX_IMAGE_COUNT, Math.max(MIN_IMAGE_COUNT, Math.trunc(count)));
+}
+
+function resolveSize(size: string | undefined): string {
+  try {
+    return parseSize(size ?? "auto").size;
+  } catch (error) {
+    throw new ProviderError({
+      kind: "usage",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 function baseImageTool(args: {
@@ -122,7 +133,7 @@ export class CodexImageProvider {
           prompt: request.prompt,
           references: request.referenceImages ?? [],
           tool: baseImageTool({
-            size: request.size,
+            size: resolveSize(request.size),
             quality: request.quality ?? DEFAULT_QUALITY,
             outputFormat: format,
             imageModel: this.imageModel,
@@ -143,7 +154,7 @@ export class CodexImageProvider {
       model,
       build: () => {
         const tool = baseImageTool({
-          size: request.size,
+          size: resolveSize(request.size),
           quality: request.quality ?? DEFAULT_QUALITY,
           outputFormat: format,
           imageModel: this.imageModel,
