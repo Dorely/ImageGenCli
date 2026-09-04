@@ -55,7 +55,6 @@
 | `packages/providers-codex/package.json` | Workspace metadata for the Codex OAuth and Responses API provider. |
 | `packages/providers-codex/tsconfig.json` | TypeScript project settings for the Codex provider package. |
 | `packages/providers-codex/src/index.ts` | Codex provider barrel exports. |
-| `packages/providers-codex/src/keytar.d.ts` | Minimal typings for the keytar vault dependency. |
 | `packages/providers-codex/src/codex-constants.ts` | Codex endpoints, OAuth client, defaults, and timeouts. |
 | `packages/providers-codex/src/pkce.ts` | PKCE pair generation and authorize-URL builder. |
 | `packages/providers-codex/src/pkce.test.ts` | Regression tests for PKCE helpers. |

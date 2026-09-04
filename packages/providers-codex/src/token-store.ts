@@ -2,9 +2,30 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ITokenStore, TokenSet, TokenStoreInfo } from "@imagegencli/core";
 
+interface KeytarLike {
+  getPassword(service: string, account: string): Promise<string | null>;
+  setPassword(service: string, account: string, password: string): Promise<void>;
+  deletePassword(service: string, account: string): Promise<boolean>;
+}
+
+function asKeytar(module: unknown): KeytarLike | null {
+  if (typeof module !== "object" || module === null) return null;
+  const record = module as Record<string, unknown>;
+  const candidate = (record["default"] ?? module) as Partial<KeytarLike>;
+  if (
+    typeof candidate.getPassword === "function" &&
+    typeof candidate.setPassword === "function" &&
+    typeof candidate.deletePassword === "function"
+  ) {
+    return candidate as KeytarLike;
+  }
+  return null;
+}
+
 export async function resolveTokenStore(): Promise<ITokenStore> {
   try {
-    const keytar = await import("keytar");
+    const keytar = asKeytar(await import("keytar"));
+    if (!keytar) return new FileTokenStore();
     const store = new KeytarTokenStore(keytar);
     await store.probe();
     return store;
@@ -14,7 +35,7 @@ export async function resolveTokenStore(): Promise<ITokenStore> {
 }
 
 class KeytarTokenStore implements ITokenStore {
-  constructor(private readonly keytar: typeof import("keytar")) {}
+  constructor(private readonly keytar: KeytarLike) {}
 
   async probe(): Promise<void> {
     await this.keytar.getPassword("ImageGenCli", "__probe__");
