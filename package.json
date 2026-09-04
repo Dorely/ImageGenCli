@@ -10,9 +10,9 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace @imagegencli/cli",
-    "build": "npm run build --workspace @imagegencli/cli",
-    "typecheck": "npm run typecheck --workspace @imagegencli/cli",
-    "test": "npm run test --workspace @imagegencli/core"
+    "build": "tsc -b --pretty false",
+    "typecheck": "tsc -b --force --pretty false",
+    "test": "npm run test --workspace @imagegencli/core & npm run test --workspace @imagegencli/providers-codex"
   },
   "engines": {
     "node": ">=20.0.0",

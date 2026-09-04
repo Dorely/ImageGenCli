@@ -32,7 +32,8 @@
 |------|-------------|
 | `apps/cli/package.json` | CLI workspace package metadata, binary entry, dependencies, and scripts. |
 | `apps/cli/tsconfig.json` | TypeScript project settings for the CLI app. |
-| `apps/cli/src/index.ts` | CLI entry point placeholder; emits scaffold status as JSON. |
+| `apps/cli/src/index.ts` | CLI entry point: arg parsing, auth/generate/edit/help wiring, JSON reporting. |
+| `apps/cli/src/help.ts` | Human-readable usage text for `help` and `--help`/`-h`. |
 
 ## Core Package
 
@@ -40,5 +41,31 @@
 |------|-------------|
 | `packages/core/package.json` | Workspace package metadata for provider-neutral contracts and shared types. |
 | `packages/core/tsconfig.json` | TypeScript project settings for the core package. |
-| `packages/core/src/index.ts` | Core package entry placeholder for provider-neutral contracts. |
-| `packages/core/src/index.test.ts` | Scaffold regression test for the core package entry. |
+| `packages/core/src/index.ts` | Core package barrel exports for contracts and shared helpers. |
+| `packages/core/src/types.ts` | Provider-neutral image request/result/error types and limits. |
+| `packages/core/src/image-provider.ts` | `IImageProvider` contract for generate/edit. |
+| `packages/core/src/token-store.ts` | `TokenSet`/`ITokenStore` contract for credential persistence. |
+| `packages/core/src/format.ts` | Output-format normalization and MIME helpers. |
+| `packages/core/src/format.test.ts` | Regression tests for format helpers. |
+
+## Codex Provider Package
+
+| File | Description |
+|------|-------------|
+| `packages/providers-codex/package.json` | Workspace metadata for the Codex OAuth and Responses API provider. |
+| `packages/providers-codex/tsconfig.json` | TypeScript project settings for the Codex provider package. |
+| `packages/providers-codex/src/index.ts` | Codex provider barrel exports. |
+| `packages/providers-codex/src/keytar.d.ts` | Minimal typings for the keytar vault dependency. |
+| `packages/providers-codex/src/codex-constants.ts` | Codex endpoints, OAuth client, defaults, and timeouts. |
+| `packages/providers-codex/src/pkce.ts` | PKCE pair generation and authorize-URL builder. |
+| `packages/providers-codex/src/pkce.test.ts` | Regression tests for PKCE helpers. |
+| `packages/providers-codex/src/loopback-server.ts` | Temporary localhost callback server for OAuth login. |
+| `packages/providers-codex/src/codex-auth.ts` | PKCE flow state, token exchange, refresh, and expiry helpers. |
+| `packages/providers-codex/src/codex-auth.test.ts` | Regression tests for token-expiry helpers. |
+| `packages/providers-codex/src/codex-token-manager.ts` | Token lifecycle: exchange, cached access, serialized refresh. |
+| `packages/providers-codex/src/token-store.ts` | Vault-first token store with restricted-file fallback. |
+| `packages/providers-codex/src/account-id.ts` | ChatGPT account-id extraction from the access JWT. |
+| `packages/providers-codex/src/account-id.test.ts` | Regression tests for account-id extraction. |
+| `packages/providers-codex/src/codex-client.ts` | Responses API image provider (generate/edit, streaming). |
+| `packages/providers-codex/src/sse.ts` | SSE parsing and image-error classification. |
+| `packages/providers-codex/src/sse.test.ts` | Regression tests for SSE parsing and error kinds. |

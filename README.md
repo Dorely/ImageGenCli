@@ -4,9 +4,8 @@ ImageGenCli is a provider-agnostic command-line tool for programmatic image gene
 
 ## Current Status
 
-- Repository scaffold only. No provider or generation capability is implemented yet.
-- Planned provider order: Codex OAuth (`gpt-image-2`) first, then Google API key.
-- Architecture will be defined separately before MVP planning.
+- Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex Responses API (`gpt-image-2`).
+- Next: Google API-key provider, then additional providers behind the same contracts.
 
 ## Development prerequisites
 
@@ -26,8 +25,21 @@ npm run build
 npm run dev        # Build the CLI and run it
 npm run typecheck  # Run TypeScript checks
 npm run build      # Build the CLI
-npm test           # Run core package tests
+npm test           # Run core and provider package tests
 ```
+
+## Usage
+
+```sh
+imagegen auth login
+imagegen auth status
+imagegen generate --prompt "a lighthouse at dawn" --out ./lighthouse.png
+imagegen generate --prompt "same lighthouse, dusk" --reference ./lighthouse.png --out ./dusk.png
+imagegen edit --prompt "add seagulls" --source ./lighthouse.png --out ./gulls.png
+imagegen help [command]
+```
+
+Login starts a temporary server on `localhost:1455`, opens the browser for Codex OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth status --show-path`). `auth logout` removes them.
 
 ## Architecture
 
