@@ -42,9 +42,11 @@ try {
     throw "Build failed."
   }
 
-  $packOutput = npm pack --workspace imagegen 2>&1
+  # npm's stdout notices pollute the output stream; capture everything and
+  # find the tarball by name instead of parsing the last line.
+  $null = npm pack --workspace imagegen 2>&1
   if ($LASTEXITCODE -ne 0) {
-    throw "npm pack failed: $packOutput"
+    throw "npm pack failed with exit code $LASTEXITCODE."
   }
 
   $expectedTarball = "imagegen-$version.tgz"
