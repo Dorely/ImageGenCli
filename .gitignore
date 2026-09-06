@@ -20,6 +20,9 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# Local session state
+.commandcode/
+
 # Local smoke-test output
 .smoke/
 
