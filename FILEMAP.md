@@ -46,6 +46,7 @@
 |------|-------------|
 | `apps/cli/package.json` | CLI workspace package metadata, binary entry, dependencies, and scripts. |
 | `apps/cli/tsconfig.json` | TypeScript project settings for the CLI app. |
+| `apps/cli/scripts/bundle.mjs` | esbuild bundler producing the self-contained publishable CLI. |
 | `apps/cli/src/index.ts` | CLI entry point: arg parsing, auth/generate/edit/help wiring, JSON reporting. |
 | `apps/cli/src/help.ts` | Human-readable usage text for `help` and `--help`/`-h`. |
 
