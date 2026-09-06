@@ -14,7 +14,7 @@
 | `AGENTS.md` | Root agent guidance for working in the ImageGenCli repo. |
 | `CONTRIBUTING.md` | Public development setup and contribution expectations. |
 | `FILEMAP.md` | This file: concise map of every source and configuration file. |
-| `LICENSE` | PolyForm Noncommercial 1.0.0 terms and ImageGenCli required copyright notice. |
+| `LICENSE` | MIT license terms. |
 | `package.json` | Root npm workspace definition and top-level scripts. |
 | `README.md` | Developer onboarding, scripts, and architecture summary. |
 | `tsconfig.json` | Root TypeScript project references for editor and build graph alignment. |

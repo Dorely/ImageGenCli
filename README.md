@@ -85,4 +85,4 @@ ImageGenCli follows the architecture direction in `VISION.md`:
 
 ## License
 
-ImageGenCli is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use requires separate permission from the licensor.
+ImageGenCli is open source under the [MIT License](LICENSE).

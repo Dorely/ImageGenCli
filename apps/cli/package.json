@@ -5,7 +5,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "description": "Provider-agnostic CLI for programmatic image generation.",
   "author": "Dorely",
   "homepage": "https://github.com/Dorely/ImageGenCli",

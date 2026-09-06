@@ -2,7 +2,7 @@
   "name": "@imagegencli/providers-codex",
   "version": "0.1.0",
   "private": true,
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "description": "Codex OAuth and Responses API image provider for ImageGenCli.",
   "author": "Dorely",
   "homepage": "https://github.com/Dorely/ImageGenCli",
