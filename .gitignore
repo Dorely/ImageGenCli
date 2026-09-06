@@ -20,6 +20,9 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# Local smoke-test output
+.smoke/
+
 # Editor and OS files
 .DS_Store
 Thumbs.db
