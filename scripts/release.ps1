@@ -42,11 +42,12 @@ try {
     throw "Build failed."
   }
 
-  # npm's stdout notices pollute the output stream; capture everything and
-  # find the tarball by name instead of parsing the last line.
-  $null = npm pack --workspace imagegen 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    throw "npm pack failed with exit code $LASTEXITCODE."
+  # npm's stdout notices come back on stderr under PowerShell remoting, which
+  # trips $ErrorActionPreference. Run pack as a child process and check the
+  # tarball by name instead of parsing output.
+  $pack = Start-Process -FilePath "npm" -ArgumentList "pack", "--workspace", "imagegen" -NoNewWindow -Wait -PassThru
+  if ($pack.ExitCode -ne 0) {
+    throw "npm pack failed with exit code $($pack.ExitCode)."
   }
 
   $expectedTarball = "imagegen-$version.tgz"
