@@ -14,7 +14,7 @@ ImageGenCli is a provider-agnostic command-line tool for programmatic image gene
 Published releases ship the `imagegen` npm package plus a matching GitHub Release tarball:
 
 ```sh
-npm install -g imagegen
+npm install -g @dorely/ai-imagegen-cli
 ```
 
 See [Releasing ImageGenCli](docs/releasing.md) for the version, tag, and publish workflow.

@@ -45,12 +45,12 @@ try {
   # npm's stdout notices come back on stderr under PowerShell remoting, which
   # trips $ErrorActionPreference. Run pack as a child process and check the
   # tarball by name instead of parsing output.
-  $pack = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "npm pack --workspace imagegen" -NoNewWindow -Wait -PassThru
+  $pack = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "npm pack --workspace @dorely/ai-imagegen-cli" -NoNewWindow -Wait -PassThru
   if ($pack.ExitCode -ne 0) {
     throw "npm pack failed with exit code $($pack.ExitCode)."
   }
 
-  $expectedTarball = "imagegen-$version.tgz"
+  $expectedTarball = "dorely-ai-imagegen-cli-$version.tgz"
   if (-not (Test-Path $expectedTarball)) {
     throw "Expected tarball $expectedTarball was not produced."
   }

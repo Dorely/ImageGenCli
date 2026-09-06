@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace imagegen",
+    "dev": "npm run dev --workspace @dorely/ai-imagegen-cli",
     "build": "tsc -b --pretty false",
     "typecheck": "tsc -b --force --pretty false",
     "test": "npm run test --workspace @imagegencli/core & npm run test --workspace @imagegencli/providers-codex",

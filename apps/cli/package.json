@@ -1,7 +1,10 @@
 {
-  "name": "imagegen",
+  "name": "@dorely/ai-imagegen-cli",
   "version": "0.1.0",
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Provider-agnostic CLI for programmatic image generation.",
   "author": "Dorely",

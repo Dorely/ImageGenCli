@@ -1,26 +1,26 @@
 # Releasing ImageGenCli
 
-ImageGenCli ships as an npm package (`imagegen`) plus a matching GitHub Release carrying the same tarball. Everything builds on this machine; no GitHub Actions are used.
+ImageGenCli ships as an npm package (`@dorely/ai-imagegen-cli`) plus a matching GitHub Release carrying the same tarball. Everything builds on this machine; no GitHub Actions are used.
 
 ## Release outputs
 
 The release pipeline creates:
 
-- `release/imagegen-VERSION.tgz`
-- `release/imagegen-VERSION.tgz.sha256`
+- `release/dorely-ai-imagegen-cli-VERSION.tgz`
+- `release/dorely-ai-imagegen-cli-VERSION.tgz.sha256`
 
 `release/` is ignored by Git. Do not commit tarballs or checksums. npm 10+ publishes from this Windows checkout with Node.js 20+.
 
 ## First-time npm setup
 
-The package name `imagegen` is unclaimed on the public registry. Before the first publish, the npm account that owns it must exist and this machine must be logged in:
+Scoped packages publish privately by default; this package sets `publishConfig.access` to `public` so the first publish claims the name openly. The npm account must exist and this machine must be logged in:
 
 ```powershell
 npm login
 npm whoami
 ```
 
-`npm publish` needs a one-time out-of-band step: register the `imagegen` name on your account, then publish from the release checkout. Later publishes from the same account just work.
+Later publishes from the same account just work. Scoped first-publishes may still prompt for 2FA; pass `--otp=<code>` inline when they do.
 
 ## Local release
 
@@ -37,10 +37,10 @@ The release script verifies that:
 - the CLI, core, and providers-codex package versions match;
 - core and provider regression tests pass;
 - TypeScript builds across the project references;
-- the expected `imagegen-VERSION.tgz` is produced by `npm pack`;
+- the expected `dorely-ai-imagegen-cli-VERSION.tgz` is produced by `npm pack`;
 - a SHA-256 checksum is written next to the tarball.
 
-Use `npm pack --workspace imagegen` directly when you only need a tarball for a quick local install test.
+Use `npm pack --workspace @dorely/ai-imagegen-cli` directly when you only need a tarball for a quick local install test.
 
 ## Version and publish workflow
 
@@ -53,10 +53,10 @@ The publish script reruns all local release checks, creates an annotated tag mat
 After the GitHub Release exists, publish the same tarball to npm from this machine:
 
 ```powershell
-npm publish --workspace imagegen
+npm publish --workspace @dorely/ai-imagegen-cli
 ```
 
-The GitHub Release stays the source of truth for what shipped; npm is the install channel (`npm install -g imagegen`). Publishing requires an authenticated GitHub CLI session with permission to push the repository and create releases, plus an authenticated npm session for the publishing account.
+The GitHub Release stays the source of truth for what shipped; npm is the install channel (`npm install -g @dorely/ai-imagegen-cli`). Publishing requires an authenticated GitHub CLI session with permission to push the repository and create releases, plus an authenticated npm session for the publishing account.
 
 ## keytar note
 

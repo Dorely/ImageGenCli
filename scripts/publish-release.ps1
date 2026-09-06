@@ -93,9 +93,9 @@ try {
     }
   }
 
-  Write-Output "Tag $Tag is pushed. Publish the CLI to npm from this machine with: npm publish --workspace imagegen"
+  Write-Output "Tag $Tag is pushed. Publish the CLI to npm from this machine with: npm publish --workspace @dorely/ai-imagegen-cli"
   Write-Output "Then attach the tarball to the GitHub release:"
-  $tarballPath = Join-Path $repositoryRoot "release\imagegen-$version.tgz"
+  $tarballPath = Join-Path $repositoryRoot "release\dorely-ai-imagegen-cli-$version.tgz"
   $checksumPath = "$tarballPath.sha256"
   & gh.exe release create $Tag $tarballPath $checksumPath --verify-tag --generate-notes --title "ImageGenCli $Tag"
   if ($LASTEXITCODE -ne 0) {
