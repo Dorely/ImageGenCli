@@ -60,7 +60,13 @@ try {
   }
   $releasePath = Join-Path "release" $expectedTarball
   Move-Item -Force $expectedTarball $releasePath
-  $hash = (Get-FileHash -Algorithm SHA256 $releasePath).Hash.ToLower()
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $hash = [BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($releasePath))).Replace("-", "").ToLower()
+  }
+  finally {
+    $sha256.Dispose()
+  }
   "$hash  $expectedTarball" | Out-File -Encoding ascii "$releasePath.sha256"
   Write-Output "Release ready: $releasePath"
 }
