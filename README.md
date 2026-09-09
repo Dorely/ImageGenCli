@@ -57,9 +57,9 @@ Each provider has its own auth namespace (`auth codex ...`, later `auth gemini .
 
 Codex login starts a temporary server on `localhost:1455`, opens the browser for OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth codex status --show-path`). `auth codex logout` removes them.
 
-## Image models and backgrounds
+## Image models
 
-Both `generate` and `edit` accept `--model <id>` and `--background auto|opaque|transparent`. Run `imagegen help`, `imagegen help generate`, or `imagegen help edit` for the model list and examples (also available with `--help`).
+Both `generate` and `edit` accept `--model <id>`. Run `imagegen help`, `imagegen help generate`, or `imagegen help edit` for the model list and examples (also available with `--help`).
 
 | Supported Codex model | Purpose | Quality |
 |---|---|---|
@@ -69,16 +69,12 @@ Both `generate` and `edit` accept `--model <id>` and `--background auto|opaque|t
 
 Use full model IDs. Other provider-supported IDs remain accepted; actual account availability is determined by Codex. Unsupported models fail without automatic fallback. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, `IMAGEGEN_CODEX_IMAGE_MODEL`, then Flare. The orchestration model is configured separately.
 
-Quality and background both default to `auto`. Transparent output requires PNG (the default) or WebP; JPEG/`jpg` is rejected. Transparency is also available for `gpt-image-2` in preview. Output bytes are saved without conversion, preserving alpha. See the [official image tool documentation](https://developers.openai.com/api/docs/guides/tools-image-generation#tool-options).
-
-The Codex OAuth endpoint can differ from the public API. Live checks on September 8, 2026 successfully generated opaque images with all three models, but the endpoint rejected transparent generation with Flare and `gpt-image-2`, and transparent WebP editing with Sunburst, with "Transparent background is not supported for this model." The CLI forwards the option and reports that provider error without substituting an opaque background.
+Quality defaults to `auto`. See the [official image tool documentation](https://developers.openai.com/api/docs/guides/tools-image-generation#tool-options).
 
 ```sh
+imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp
 imagegen generate --model gpt-image-2 --prompt "a lighthouse" --out ./classic.png
 imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a product photo" --out ./product.png
-imagegen generate --background transparent --prompt "a bicycle cutout" --out ./bicycle.png
-imagegen edit --background transparent --format webp --source ./bicycle.png --prompt "make the frame blue" --out ./blue.webp
-imagegen generate --background opaque --prompt "a landscape" --out ./landscape.png
 ```
 
 ## Configuration

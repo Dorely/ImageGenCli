@@ -1,21 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mimeTypeForFormat, normalizeImageBackground, normalizeOutputFormat } from "./format.js";
-
-describe("normalizeImageBackground", () => {
-  it("defaults to auto and normalizes explicit choices", () => {
-    expect(normalizeImageBackground(undefined, "png")).toBe("auto");
-    expect(normalizeImageBackground(" TRANSPARENT ", "webp")).toBe("transparent");
-    expect(normalizeImageBackground("opaque", "jpeg")).toBe("opaque");
-  });
-
-  it.each(["", "   ", "clear"])("rejects invalid background %j", (value) => {
-    expect(() => normalizeImageBackground(value, "png")).toThrow(/--background/);
-  });
-
-  it("requires a format supporting alpha for transparency", () => {
-    expect(() => normalizeImageBackground("transparent", "jpeg")).toThrow(/PNG or WebP/);
-  });
-});
+import { mimeTypeForFormat, normalizeOutputFormat } from "./format.js";
 
 describe("normalizeOutputFormat", () => {
   it("maps jpg to jpeg", () => {

@@ -2,11 +2,10 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { inflateSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ payloads: [] as { tools: Record<string, unknown>[] }[] }));
-// A one-pixel RGBA PNG with a fully transparent pixel.
+// A one-pixel PNG fixture for byte-preserving file output.
 const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=";
 
 vi.mock("@imagegencli/providers-codex", async (importOriginal) => {
@@ -66,9 +65,9 @@ async function run(args: string[]) {
 }
 
 describe("CLI help", () => {
-  it.each([[], ["help"], ["--help"], ["help", "generate"], ["generate", "--help"], ["help", "edit"], ["edit", "--help"]])("documents models and background usage for %j", async (...args) => {
+  it.each([[], ["help"], ["--help"], ["help", "generate"], ["generate", "--help"], ["help", "edit"], ["edit", "--help"]])("documents models and quality usage for %j", async (...args) => {
     await run(args);
-    for (const text of ["gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "--model", "--background", "auto, opaque, or transparent", "xhigh and max", "JPEG is rejected", "IMAGEGEN_CODEX_IMAGE_MODEL", "Examples:"]) {
+    for (const text of ["gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "--model", "xhigh and max", "IMAGEGEN_CODEX_IMAGE_MODEL", "Examples:"]) {
       expect(stdout).toContain(text);
     }
     expect(state.payloads).toHaveLength(0);
@@ -77,16 +76,13 @@ describe("CLI help", () => {
 });
 
 describe("CLI image requests", () => {
-  it.each(["generate", "edit"])("forwards %s options and saves transparent PNG bytes unchanged", async (command) => {
+  it.each(["generate", "edit"])("forwards %s options and saves PNG bytes unchanged", async (command) => {
     const source = join(directory, "source.png");
     const out = join(directory, "out.png");
     const fixture = Buffer.from(png, "base64");
-    // Validate the fixture is RGBA and its unfiltered pixel has zero alpha.
-    expect(fixture[25]).toBe(6);
-    expect([...inflateSync(fixture.subarray(41, 52))]).toEqual([0, 0, 0, 0, 0]);
     await writeFile(source, fixture);
-    await run([command, "--prompt", "Draw a blue bicycle", "--out", out, "--model", "gpt-image-2.5-sunburst", "--background", "transparent", "--quality", "max", ...(command === "edit" ? ["--source", source, "--mask", source] : []), "--reference", source]);
-    expect(state.payloads[0].tools[0]).toMatchObject({ model: "gpt-image-2.5-sunburst", background: "transparent", quality: "max", action: command, output_format: "png" });
+    await run([command, "--prompt", "Draw a blue bicycle", "--out", out, "--model", "gpt-image-2.5-sunburst", "--quality", "max", ...(command === "edit" ? ["--source", source, "--mask", source] : []), "--reference", source]);
+    expect(state.payloads[0].tools[0]).toMatchObject({ model: "gpt-image-2.5-sunburst", background: "auto", quality: "max", action: command, output_format: "png" });
     const result = JSON.parse(stdout);
     expect(result.imageModel).toBe("gpt-image-2.5-sunburst");
     expect(result.images[0].path).toBe(out);
@@ -94,7 +90,7 @@ describe("CLI image requests", () => {
     expect(stderr).toBe("");
   });
 
-  it.each([["--model", ""], ["--model", "   "], ["--background", ""], ["--background", "clear"], ["--background", "transparent", "--format", "jpg"]])("rejects invalid selection %j before generation", async (...flags) => {
+  it.each([["--model", ""], ["--model", "   "], ["--background", "transparent"], ["--unknown-option", "value"]])("rejects invalid selection %j before generation", async (...flags) => {
     await expect(run(["generate", "--prompt", "Draw a bicycle", "--out", join(directory, "unused.png"), ...flags])).rejects.toThrow();
     expect(JSON.parse(stderr.split("\n")[0]).error.kind).toBe("usage");
     expect(state.payloads).toHaveLength(0);

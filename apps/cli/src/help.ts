@@ -4,7 +4,6 @@ const IMAGE_OPTIONS = `Image options (generate, edit):
   --provider <name>      Repeatable. Defaults to the only configured provider;
                          required when several are configured.
   --model <id>          Image model override (Codex default gpt-image-2.5-flare)
-  --background <value>  auto, opaque, or transparent (default auto)
   --reference <file>     Reference image for continuity (repeatable, max 4)
   --size <size>          auto, WIDTHxHEIGHT, aspect (16:9), or preset
                      square, portrait, landscape, wide (validated per
@@ -25,17 +24,12 @@ IMAGEGEN_CODEX_MODEL configures orchestration separately; --model selects images
 
 Codex quality: auto (default), low, medium, high; Flare/Sunburst also support
 xhigh and max. gpt-image-2 rejects xhigh/max.
-Transparent backgrounds require --format png (default) or webp; JPEG is rejected.
-gpt-image-2 transparency is in preview. Codex endpoint availability may differ
-from the public API; unsupported transparency returns a provider error.
 `;
 
 const GENERATE_EXAMPLES = `Examples:
   imagegen generate --prompt "a lighthouse at dawn" --out ./lighthouse.png
   imagegen generate --model gpt-image-2 --prompt "a lighthouse" --out ./classic.png
   imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a product photo" --out ./product.png
-  imagegen generate --background transparent --prompt "a bicycle cutout" --out ./bicycle.png
-  imagegen generate --background opaque --prompt "a landscape" --out ./landscape.png
 `;
 
 const EDIT_EXAMPLES = `Edit options:
@@ -43,8 +37,8 @@ const EDIT_EXAMPLES = `Edit options:
   --mask <file>          Optional edit mask
 
 Examples:
+  imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp
   imagegen edit --model gpt-image-2.5-sunburst --quality max --source ./product.png --prompt "add a ribbon" --out ./ribbon.png
-  imagegen edit --background transparent --format webp --source ./bicycle.png --prompt "make the frame blue" --out ./blue.webp
 `;
 
 export const USAGE = `imagegen - provider-agnostic image generation CLI

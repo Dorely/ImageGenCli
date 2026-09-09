@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { GenerateRequest, ImageBackground } from "@imagegencli/core";
+import type { GenerateRequest } from "@imagegencli/core";
 import { CodexImageProvider, type CodexClientOptions } from "./codex-client.js";
 import { CodexTokenManager } from "./codex-token-manager.js";
 
@@ -65,36 +65,14 @@ describe("image model selection", () => {
   });
 });
 
-describe("backgrounds and quality", () => {
-  it.each(["auto", "opaque", "transparent"] as const)("forwards %s on generate and edit", async (background) => {
-    const { provider, payload } = setup();
-    await provider.generate({ ...request, background });
-    await provider.edit({ ...request, background, sourceImage: input });
-    expect(payload().tools[0].background).toBe(background);
-    expect(payload(1).tools[0].background).toBe(background);
-  });
-
-  it.each(["", "  ", "clear"])("rejects invalid background %j at the provider boundary", async (background) => {
-    const { provider, fetchImpl } = setup();
-    await expect(provider.generate({ ...request, background: background as ImageBackground })).rejects.toMatchObject({ kind: "usage" });
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it.each(["jpeg", "jpg", "JPEG"])("rejects transparent %s before credentials or network", async (format) => {
-    const { provider, fetchImpl, load } = setup();
-    await expect(provider.generate({ ...request, format, background: "transparent" })).rejects.toMatchObject({ kind: "usage" });
-    await expect(provider.edit({ ...request, format, background: "transparent", sourceImage: input })).rejects.toMatchObject({ kind: "usage" });
-    expect(load).not.toHaveBeenCalled();
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it.each(["png", "webp"])("preserves references, masks and options for multiple transparent %s images", async (format) => {
+describe("image options and quality", () => {
+  it.each(["png", "webp"])("preserves references, masks and options for multiple %s images", async (format) => {
     const { provider, payload, fetchImpl } = setup();
-    const result = await provider.edit({ ...request, model: models[1], sourceImage: input, referenceImages: [input], mask: input, background: "transparent", format, count: 2 });
+    const result = await provider.edit({ ...request, model: models[1], sourceImage: input, referenceImages: [input], mask: input, format, count: 2 });
     expect(result.images).toHaveLength(2);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     for (let i = 0; i < 2; i++) {
-      expect(payload(i).tools[0]).toMatchObject({ model: models[1], background: "transparent", output_format: format, action: "edit", input_image_mask: { image_url: "data:image/png;base64,AQID" } });
+      expect(payload(i).tools[0]).toMatchObject({ model: models[1], background: "auto", output_format: format, action: "edit", input_image_mask: { image_url: "data:image/png;base64,AQID" } });
       expect(payload(i).input[0].content).toHaveLength(3);
       expect(result.images[i].mimeType).toBe(`image/${format}`);
     }

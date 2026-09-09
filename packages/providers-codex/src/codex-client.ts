@@ -1,4 +1,4 @@
-import { normalizeImageBackground, normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageBackground, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
+import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -47,7 +47,6 @@ function resolveSize(size: string | undefined): ImageSize {
 function baseImageTool(args: {
   size?: string;
   quality?: string;
-  background: ImageBackground;
   outputFormat: OutputFormat;
   outputCompression?: number;
   imageModel: string;
@@ -60,7 +59,7 @@ function baseImageTool(args: {
     action: args.action,
     size: args.size && args.size.trim() ? args.size.trim() : "auto",
     output_format: args.outputFormat,
-    background: args.background,
+    background: "auto",
   };
   if (args.partialImages > 0) tool["partial_images"] = Math.min(3, Math.max(0, args.partialImages));
   if (args.quality && args.quality.trim() && args.quality.trim().toLowerCase() !== "auto") {
@@ -119,7 +118,6 @@ export class CodexImageProvider {
   async generate(request: GenerateRequest): Promise<ProviderResult> {
     const format = normalizeOutputFormat(request.format);
     const size = this.sizePolicy.resolveSize(request.size);
-    const background = normalizeImageBackground(request.background, format);
     const imageModel = this.resolveImageModel(request);
     return this.runAll({
       format,
@@ -137,7 +135,6 @@ export class CodexImageProvider {
             quality: request.quality ?? DEFAULT_QUALITY,
             outputFormat: format,
             imageModel,
-            background,
             action: "generate",
             partialImages: this.partialImages,
           }),
@@ -148,7 +145,6 @@ export class CodexImageProvider {
   async edit(request: EditRequest): Promise<ProviderResult> {
     const format = normalizeOutputFormat(request.format);
     const size = this.sizePolicy.resolveSize(request.size);
-    const background = normalizeImageBackground(request.background, format);
     const imageModel = this.resolveImageModel(request);
     const references: ImageInput[] = [request.sourceImage, ...(request.referenceImages ?? [])];
     return this.runAll({
@@ -163,7 +159,6 @@ export class CodexImageProvider {
           quality: request.quality ?? DEFAULT_QUALITY,
           outputFormat: format,
           imageModel,
-          background,
           action: "edit",
           partialImages: this.partialImages,
         });

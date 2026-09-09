@@ -42,7 +42,7 @@ The CLI layer stays thin: argument parsing, validation, and result reporting. Al
 
 - Authenticate with Codex OAuth (PKCE flow), following the auth and calling patterns established in the Lorekeeper repo.
 - Generate and edit images through the Codex Responses API, defaulting to `gpt-image-2.5-flare`, with optional model selection for `gpt-image-2.5-sunburst`, `gpt-image-2`, or other provider-supported models.
-- Support the portable core options: prompt, size, quality, background (including transparency), output format, and count.
+- Support the portable core options: prompt, size, quality, output format, and count.
 - Write image files to explicit output paths and report machine-readable results.
 
 ## Phase 2: Google (API Key)
