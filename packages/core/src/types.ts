@@ -1,4 +1,5 @@
 export type OutputFormat = "png" | "jpeg" | "webp";
+export type ImageBackground = "auto" | "opaque" | "transparent";
 
 export interface ImageInput {
   data: Uint8Array;
@@ -8,6 +9,8 @@ export interface ImageInput {
 
 export interface GenerateRequest {
   prompt: string;
+  model?: string;
+  background?: ImageBackground;
   size?: string;
   quality?: string;
   format?: string;

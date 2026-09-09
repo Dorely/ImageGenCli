@@ -23,7 +23,7 @@
 - Package manager: npm workspaces.
 - Runtime: Node.js 20 or newer, strict TypeScript throughout.
 - CLI: thin command surface in `apps/cli` over provider-neutral contracts in `packages/core`.
-- Tests: Vitest, scoped to `packages/core` until the repository policy is deliberately expanded.
+- Tests: Vitest for `packages/core` and `packages/providers-codex`, including CLI integration coverage for provider behavior.
 
 ## Architectural Overview
 - ImageGenCli is provider-agnostic and auth-agnostic. The CLI exposes only what a calling agent needs to programmatically create images; provider and credential details stay behind narrow contracts.

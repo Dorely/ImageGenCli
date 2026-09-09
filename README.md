@@ -6,7 +6,7 @@ ImageGenCli is a provider-agnostic command-line tool for programmatic image gene
 
 ## Current Status
 
-- Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex Responses API (`gpt-image-2`).
+- Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex Responses API (default `gpt-image-2.5-flare`, with Sunburst and `gpt-image-2` selectable).
 - Next: Google API-key provider, then additional providers behind the same contracts.
 
 ## Install
@@ -57,10 +57,34 @@ Each provider has its own auth namespace (`auth codex ...`, later `auth gemini .
 
 Codex login starts a temporary server on `localhost:1455`, opens the browser for OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth codex status --show-path`). `auth codex logout` removes them.
 
+## Image models and backgrounds
+
+Both `generate` and `edit` accept `--model <id>` and `--background auto|opaque|transparent`. Run `imagegen help`, `imagegen help generate`, or `imagegen help edit` for the model list and examples (also available with `--help`).
+
+| Supported Codex model | Purpose | Quality |
+|---|---|---|
+| `gpt-image-2.5-flare` | Default; fast generation and editing | auto, low, medium, high, xhigh, max |
+| `gpt-image-2.5-sunburst` | Higher-precision generation and editing | auto, low, medium, high, xhigh, max |
+| `gpt-image-2` | Previous model; retained for compatibility | auto, low, medium, high |
+
+Use full model IDs. Other provider-supported IDs remain accepted; actual account availability is determined by Codex. Unsupported models fail without automatic fallback. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, `IMAGEGEN_CODEX_IMAGE_MODEL`, then Flare. The orchestration model is configured separately.
+
+Quality and background both default to `auto`. Transparent output requires PNG (the default) or WebP; JPEG/`jpg` is rejected. Transparency is also available for `gpt-image-2` in preview. Output bytes are saved without conversion, preserving alpha. See the [official image tool documentation](https://developers.openai.com/api/docs/guides/tools-image-generation#tool-options).
+
+The Codex OAuth endpoint can differ from the public API. Live checks on September 8, 2026 successfully generated opaque images with all three models, but the endpoint rejected transparent generation with Flare and `gpt-image-2`, and transparent WebP editing with Sunburst, with "Transparent background is not supported for this model." The CLI forwards the option and reports that provider error without substituting an opaque background.
+
+```sh
+imagegen generate --model gpt-image-2 --prompt "a lighthouse" --out ./classic.png
+imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a product photo" --out ./product.png
+imagegen generate --background transparent --prompt "a bicycle cutout" --out ./bicycle.png
+imagegen edit --background transparent --format webp --source ./bicycle.png --prompt "make the frame blue" --out ./blue.webp
+imagegen generate --background opaque --prompt "a landscape" --out ./landscape.png
+```
+
 ## Configuration
 
 - `IMAGEGEN_CODEX_MODEL` — optional override for the Codex orchestration model (default `gpt-5.6-luna`). This model executes the image toolcall and is part of the provider's request shape; it never rewrites the caller's prompt.
-- `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2`).
+- `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2.5-flare`); `--model` takes precedence.
 - `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
 
 The tool is a passthrough: prompts and reference images come from the caller verbatim; the CLI adds no prompt content of its own.

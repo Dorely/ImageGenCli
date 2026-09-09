@@ -48,7 +48,7 @@
 | `apps/cli/tsconfig.json` | TypeScript project settings for the CLI app. |
 | `apps/cli/scripts/bundle.mjs` | esbuild bundler producing the self-contained publishable CLI. |
 | `apps/cli/src/index.ts` | CLI entry point: arg parsing, auth/generate/edit/help wiring, JSON reporting. |
-| `apps/cli/src/help.ts` | Human-readable usage text for `help` and `--help`/`-h`. |
+| `apps/cli/src/help.ts` | Shared image options, supported Codex models, and examples for general and command help. |
 
 ## Core Package
 
@@ -62,7 +62,7 @@
 | `packages/core/src/provider-registry.ts` | Provider registry: routing, configured detection, multi-select. |
 | `packages/core/src/provider-registry.test.ts` | Regression tests for provider resolution. |
 | `packages/core/src/token-store.ts` | `TokenSet`/`ITokenStore` contract for credential persistence. |
-| `packages/core/src/format.ts` | Output-format normalization and MIME helpers. |
+| `packages/core/src/format.ts` | Output-format normalization, background validation, and MIME helpers. |
 | `packages/core/src/format.test.ts` | Regression tests for format helpers. |
 | `packages/core/src/image-size.ts` | Size parsing, validation, and provider-limit raster normalization. |
 | `packages/core/src/image-size.test.ts` | Regression tests for size helpers. |
@@ -85,6 +85,8 @@
 | `packages/providers-codex/src/account-id.ts` | ChatGPT account-id extraction from the access JWT. |
 | `packages/providers-codex/src/account-id.test.ts` | Regression tests for account-id extraction. |
 | `packages/providers-codex/src/codex-client.ts` | Responses API image provider (generate/edit, streaming). |
+| `packages/providers-codex/src/codex-client.test.ts` | Mock transport tests for model selection, backgrounds, quality, and edit inputs. |
+| `packages/providers-codex/src/cli-integration.test.ts` | CLI help, validation, request forwarding, and transparent file saving with mocked provider transport. |
 | `packages/providers-codex/src/codex-entry.ts` | Registry entry wiring the Codex provider and auth status. |
 | `packages/providers-codex/src/sse.ts` | SSE parsing and image-error classification. |
 | `packages/providers-codex/src/sse.test.ts` | Regression tests for SSE parsing and error kinds. |

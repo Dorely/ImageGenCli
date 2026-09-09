@@ -1,3 +1,52 @@
+const IMAGE_OPTIONS = `Image options (generate, edit):
+  --prompt <text>        Prompt text (required)
+  --out <path|dir>       Output file or directory (required)
+  --provider <name>      Repeatable. Defaults to the only configured provider;
+                         required when several are configured.
+  --model <id>          Image model override (Codex default gpt-image-2.5-flare)
+  --background <value>  auto, opaque, or transparent (default auto)
+  --reference <file>     Reference image for continuity (repeatable, max 4)
+  --size <size>          auto, WIDTHxHEIGHT, aspect (16:9), or preset
+                     square, portrait, landscape, wide (validated per
+                     provider; bad aspects are rejected)
+  --quality <quality>    Quality hint (provider-specific, default auto)
+  --format <format>      png, jpeg, or webp (default png)
+  --count <n>            Number of images, 1-4 (default 1)
+
+Supported Codex models (account availability is determined by the provider):
+  gpt-image-2.5-flare     Default; fast image generation and editing
+  gpt-image-2.5-sunburst  Higher-precision image generation and editing
+  gpt-image-2            Previous model; retained for compatibility
+
+Use full model IDs; other provider-supported IDs may also be supplied.
+Model precedence: --model > constructor imageModel (library callers) >
+IMAGEGEN_CODEX_IMAGE_MODEL > gpt-image-2.5-flare.
+IMAGEGEN_CODEX_MODEL configures orchestration separately; --model selects images.
+
+Codex quality: auto (default), low, medium, high; Flare/Sunburst also support
+xhigh and max. gpt-image-2 rejects xhigh/max.
+Transparent backgrounds require --format png (default) or webp; JPEG is rejected.
+gpt-image-2 transparency is in preview. Codex endpoint availability may differ
+from the public API; unsupported transparency returns a provider error.
+`;
+
+const GENERATE_EXAMPLES = `Examples:
+  imagegen generate --prompt "a lighthouse at dawn" --out ./lighthouse.png
+  imagegen generate --model gpt-image-2 --prompt "a lighthouse" --out ./classic.png
+  imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a product photo" --out ./product.png
+  imagegen generate --background transparent --prompt "a bicycle cutout" --out ./bicycle.png
+  imagegen generate --background opaque --prompt "a landscape" --out ./landscape.png
+`;
+
+const EDIT_EXAMPLES = `Edit options:
+  --source <file>        Source image (required)
+  --mask <file>          Optional edit mask
+
+Examples:
+  imagegen edit --model gpt-image-2.5-sunburst --quality max --source ./product.png --prompt "add a ribbon" --out ./ribbon.png
+  imagegen edit --background transparent --format webp --source ./bicycle.png --prompt "make the frame blue" --out ./blue.webp
+`;
+
 export const USAGE = `imagegen - provider-agnostic image generation CLI
 
 Usage:
@@ -9,18 +58,9 @@ Usage:
   imagegen providers
   imagegen help [command]
 
-Image options (generate, edit):
-  --prompt <text>        Prompt text (required)
-  --out <path|dir>       Output file or directory (required)
-  --provider <name>      Repeatable. Defaults to the only configured provider;
-                         required when several are configured.
-  --reference <file>     Reference image for continuity (repeatable, max 4)
-  --size <size>          auto, WIDTHxHEIGHT, aspect (16:9), or preset
-                     square, portrait, landscape, wide (validated per
-                     provider; bad aspects are rejected)
-  --quality <quality>    Quality hint (provider-specific, default auto)
-  --format <format>      png, jpeg, or webp (default png)
-  --count <n>            Number of images, 1-4 (default 1)
+${IMAGE_OPTIONS}
+${GENERATE_EXAMPLES}
+${EDIT_EXAMPLES}
 
 Auth options:
   --timeout <minutes>    Login wait timeout (default 10)
@@ -64,16 +104,16 @@ Usage:
 Usage:
   imagegen generate --prompt <text> --out <path|dir> [--provider <name>] [options]
 
-Options: --provider <name> (repeatable; run on several providers),
---reference <file> (repeatable, max 4), --size, --quality,
---format png|jpeg|webp, --count 1-4.
+${IMAGE_OPTIONS}
+${GENERATE_EXAMPLES}
 `,
   edit: `imagegen edit - edit a source image with a prompt
 
 Usage:
   imagegen edit --prompt <text> --source <file> [--mask <file>] --out <path|dir> [--provider <name>] [options]
 
-Same image options as generate.
+${IMAGE_OPTIONS}
+${EDIT_EXAMPLES}
 `,
   providers: `imagegen providers - list registered and configured providers
 

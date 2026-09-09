@@ -1,4 +1,4 @@
-import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
+import { normalizeImageBackground, normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageBackground, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -47,6 +47,7 @@ function resolveSize(size: string | undefined): ImageSize {
 function baseImageTool(args: {
   size?: string;
   quality?: string;
+  background: ImageBackground;
   outputFormat: OutputFormat;
   outputCompression?: number;
   imageModel: string;
@@ -59,7 +60,7 @@ function baseImageTool(args: {
     action: args.action,
     size: args.size && args.size.trim() ? args.size.trim() : "auto",
     output_format: args.outputFormat,
-    background: "auto",
+    background: args.background,
   };
   if (args.partialImages > 0) tool["partial_images"] = Math.min(3, Math.max(0, args.partialImages));
   if (args.quality && args.quality.trim() && args.quality.trim().toLowerCase() !== "auto") {
@@ -118,8 +119,11 @@ export class CodexImageProvider {
   async generate(request: GenerateRequest): Promise<ProviderResult> {
     const format = normalizeOutputFormat(request.format);
     const size = this.sizePolicy.resolveSize(request.size);
+    const background = normalizeImageBackground(request.background, format);
+    const imageModel = this.resolveImageModel(request);
     return this.runAll({
       format,
+      imageModel,
       count: normalizeCount(request.count),
       prompt: request.prompt,
       size,
@@ -132,7 +136,8 @@ export class CodexImageProvider {
             size: size.size,
             quality: request.quality ?? DEFAULT_QUALITY,
             outputFormat: format,
-            imageModel: this.imageModel,
+            imageModel,
+            background,
             action: "generate",
             partialImages: this.partialImages,
           }),
@@ -143,9 +148,12 @@ export class CodexImageProvider {
   async edit(request: EditRequest): Promise<ProviderResult> {
     const format = normalizeOutputFormat(request.format);
     const size = this.sizePolicy.resolveSize(request.size);
+    const background = normalizeImageBackground(request.background, format);
+    const imageModel = this.resolveImageModel(request);
     const references: ImageInput[] = [request.sourceImage, ...(request.referenceImages ?? [])];
     return this.runAll({
       format,
+      imageModel,
       count: normalizeCount(request.count),
       prompt: request.prompt,
       size,
@@ -154,7 +162,8 @@ export class CodexImageProvider {
           size: size.size,
           quality: request.quality ?? DEFAULT_QUALITY,
           outputFormat: format,
-          imageModel: this.imageModel,
+          imageModel,
+          background,
           action: "edit",
           partialImages: this.partialImages,
         });
@@ -171,12 +180,22 @@ export class CodexImageProvider {
     });
   }
 
-  private async runAll(args: { format: OutputFormat; count: number; prompt: string; size: ImageSize; build: () => Record<string, unknown> }): Promise<ProviderResult> {
+  private resolveImageModel(request: GenerateRequest): string {
+    const model = (request.model ?? this.imageModel).trim();
+    if (!model) throw new ProviderError({ kind: "usage", message: "Image model must not be blank." });
+    const quality = request.quality?.trim().toLowerCase();
+    if (model === "gpt-image-2" && (quality === "xhigh" || quality === "max")) {
+      throw new ProviderError({ kind: "usage", message: "gpt-image-2 supports quality auto, low, medium, or high. Use Flare or Sunburst for xhigh or max." });
+    }
+    return model;
+  }
+
+  private async runAll(args: { imageModel: string; format: OutputFormat; count: number; prompt: string; size: ImageSize; build: () => Record<string, unknown> }): Promise<ProviderResult> {
     const images: ProviderResult["images"] = [];
     for (let i = 0; i < args.count; i += 1) {
       images.push(await this.sendOnce(args.build(), args.format, args.prompt, args.size));
     }
-    return { provider: this.name, imageModel: this.imageModel, images };
+    return { provider: this.name, imageModel: args.imageModel, images };
   }
 
   private async sendOnce(payload: Record<string, unknown>, format: OutputFormat, prompt: string, size: ImageSize): Promise<ProviderResult["images"][number]> {

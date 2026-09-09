@@ -38,11 +38,11 @@ The CLI layer stays thin: argument parsing, validation, and result reporting. Al
 
 # MVP Scope
 
-## Phase 1: Codex (OpenAI gpt-image-2)
+## Phase 1: Codex (OpenAI GPT Image)
 
 - Authenticate with Codex OAuth (PKCE flow), following the auth and calling patterns established in the Lorekeeper repo.
-- Generate images through the Codex Responses API targeting the `gpt-image-2` model.
-- Support the portable core options: prompt, size, quality, output format, and count.
+- Generate and edit images through the Codex Responses API, defaulting to `gpt-image-2.5-flare`, with optional model selection for `gpt-image-2.5-sunburst`, `gpt-image-2`, or other provider-supported models.
+- Support the portable core options: prompt, size, quality, background (including transparency), output format, and count.
 - Write image files to explicit output paths and report machine-readable results.
 
 ## Phase 2: Google (API Key)

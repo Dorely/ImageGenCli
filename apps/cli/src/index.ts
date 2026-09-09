@@ -5,6 +5,7 @@ import {
   MAX_IMAGE_COUNT,
   MAX_REFERENCE_IMAGES,
   MIN_IMAGE_COUNT,
+  normalizeImageBackground,
   normalizeOutputFormat,
   ProviderError,
   ProviderRegistry,
@@ -76,6 +77,17 @@ function parseArgs(argv: string[]): { flags: Map<string, string | boolean | stri
 function flagValue(flags: Map<string, string | boolean | string[]>, key: string): string | undefined {
   const value = flags.get(key);
   return typeof value === "string" ? value : undefined;
+}
+
+function imageSelection(flags: Map<string, string | boolean | string[]>): Pick<GenerateRequest, "model" | "background"> {
+  const model = flagValue(flags, "model")?.trim();
+  if (model !== undefined && !model) fail("usage", "--model must not be blank.", EXIT_USAGE);
+  try {
+    const background = normalizeImageBackground(flagValue(flags, "background"), normalizeOutputFormat(flagValue(flags, "format")));
+    return { model, background };
+  } catch (error) {
+    fail("usage", error instanceof Error ? error.message : String(error), EXIT_USAGE);
+  }
 }
 
 function redirectUri(): string {
@@ -289,8 +301,10 @@ async function runGenerate(flags: Map<string, string | boolean | string[]>): Pro
   const out = flagValue(flags, "out");
   if (!prompt) fail("usage", "Missing required --prompt.", EXIT_USAGE);
   if (!out) fail("usage", "Missing required --out.", EXIT_USAGE);
+  const selection = imageSelection(flags);
   const providers = await resolveProviders(requestedProviders(flags));
   const request: GenerateRequest = {
+    ...selection,
     prompt,
     out,
     size: flagValue(flags, "size"),
@@ -319,6 +333,7 @@ async function runEdit(flags: Map<string, string | boolean | string[]>): Promise
   if (!out) fail("usage", "Missing required --out.", EXIT_USAGE);
   if (!source) fail("usage", "Missing required --source.", EXIT_USAGE);
   const request: EditRequest = {
+    ...imageSelection(flags),
     prompt,
     out,
     size: flagValue(flags, "size"),
