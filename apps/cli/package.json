@@ -18,7 +18,8 @@
     "imagegen": "./dist/index.js"
   },
   "files": [
-    "dist/**"
+    "dist/**",
+    "skill/**"
   ],
   "scripts": {
     "dev": "npm run build && node ./dist/index.js",

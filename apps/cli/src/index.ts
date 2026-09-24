@@ -28,6 +28,7 @@ import {
   CodexTokenManager,
 } from "@imagegencli/providers-codex";
 import { helpFor } from "./help.js";
+import { skillText } from "./skill.js";
 
 const EXIT_USAGE = 2;
 const EXIT_AUTH = 3;
@@ -374,6 +375,10 @@ async function main(): Promise<void> {
   try {
     if (command === "help") {
       process.stdout.write(helpFor(sub));
+      return;
+    }
+    if (command === "skill" && !sub) {
+      process.stdout.write(await skillText());
       return;
     }
     if (command === "providers" && !sub) {

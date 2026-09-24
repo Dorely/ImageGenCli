@@ -50,6 +50,7 @@ Usage:
   imagegen generate --prompt <text> --out <path|dir> [--provider <name>] [options]
   imagegen edit --prompt <text> --source <file> [--mask <file>] --out <path|dir> [--provider <name>] [options]
   imagegen providers
+  imagegen skill
   imagegen help [command]
 
 ${IMAGE_OPTIONS}
@@ -115,6 +116,13 @@ Usage:
   imagegen providers
 
 Prints JSON with each provider and whether it is configured.
+`,
+  skill: `imagegen skill - print the reusable agent skill as Markdown
+
+Usage:
+  imagegen skill
+
+Prints SKILL.md content for use in agent skills directories or global instructions.
 `,
   help: `imagegen help - show human-readable usage
 

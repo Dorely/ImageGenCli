@@ -50,12 +50,25 @@ imagegen generate --prompt "a lighthouse at dawn" --out ./lighthouse.png
 imagegen generate --prompt "same lighthouse, dusk" --reference ./lighthouse.png --out ./dusk.png
 imagegen generate --prompt "same lighthouse, dusk" --provider codex --out ./dusk.png
 imagegen edit --prompt "add seagulls" --source ./lighthouse.png --out ./gulls.png
+imagegen skill
 imagegen help [command]
 ```
 
 Each provider has its own auth namespace (`auth codex ...`, later `auth gemini ...`); several can stay configured at once. `generate` and `edit` take a repeatable `--provider` flag: omit it when only one provider is configured, pass one or more names otherwise. Multi-provider runs write `<provider>-`-prefixed files and print one JSON result per provider.
 
 Codex login starts a temporary server on `localhost:1455`, opens the browser for OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth codex status --show-path`). `auth codex logout` removes them.
+
+## Agent skill
+
+`imagegen skill` prints a reusable `SKILL.md` from the installed npm package. The skill explains when and how to use `imagegen`, including generation, edits, provider setup, and JSON results. It works as plain instructions in any agent harness that can run a shell command.
+
+For Claude Code across all projects, add this to `~/.claude/CLAUDE.md` (on Windows, `%USERPROFILE%\.claude\CLAUDE.md`):
+
+```md
+When I ask you to create or edit an image, run `imagegen skill` and follow its instructions. Use the installed `imagegen` CLI unless I explicitly choose another tool.
+```
+
+For native skill discovery, save the output of `imagegen skill` as `~/.claude/skills/imagegen-cli/SKILL.md` for Claude Code or `~/.agents/skills/imagegen-cli/SKILL.md` for Codex. Refresh those copies after updating the npm package. The short global instruction is enough if you prefer not to maintain skill copies.
 
 ## Image models
 

@@ -49,6 +49,8 @@
 | `apps/cli/scripts/bundle.mjs` | esbuild bundler producing the self-contained publishable CLI. |
 | `apps/cli/src/index.ts` | CLI entry point: arg parsing, auth/generate/edit/help wiring, JSON reporting. |
 | `apps/cli/src/help.ts` | Shared image options, supported Codex models, and examples for general and command help. |
+| `apps/cli/src/skill.ts` | Loads the packaged agent skill for the `imagegen skill` command. |
+| `apps/cli/skill/SKILL.md` | Reusable agent instructions packaged with the npm CLI. |
 
 ## Core Package
 
