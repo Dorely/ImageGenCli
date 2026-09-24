@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,6 +71,34 @@ describe("CLI help", () => {
       expect(stdout).toContain(text);
     }
     expect(state.payloads).toHaveLength(0);
+    expect(stderr).toBe("");
+  });
+});
+
+describe("CLI skill installation", () => {
+  it("installs the packaged skill in a custom skills directory", async () => {
+    await run(["skill", "install", "--target", directory]);
+    const result = JSON.parse(stdout);
+    const path = join(directory, "imagegen-cli", "SKILL.md");
+    expect(result.installed).toEqual([{ target: directory, path, status: "installed" }]);
+    expect(await readFile(path, "utf8")).toContain("name: imagegen-cli");
+    expect(stderr).toBe("");
+  });
+
+  it("preserves a different existing skill unless forced", async () => {
+    const path = join(directory, "imagegen-cli", "SKILL.md");
+    await mkdir(join(directory, "imagegen-cli"));
+    await writeFile(path, "personal edits");
+    await expect(run(["skill", "install", "--target", directory])).rejects.toThrow();
+    expect(JSON.parse(stderr.split("\n")[0]).error.kind).toBe("usage");
+    expect(await readFile(path, "utf8")).toBe("personal edits");
+
+    vi.resetModules();
+    stdout = "";
+    stderr = "";
+    await run(["skill", "install", "--target", directory, "--force"]);
+    expect(JSON.parse(stdout).installed[0].status).toBe("updated");
+    expect(await readFile(path, "utf8")).toContain("name: imagegen-cli");
     expect(stderr).toBe("");
   });
 });

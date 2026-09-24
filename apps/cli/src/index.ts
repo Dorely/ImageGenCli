@@ -28,7 +28,7 @@ import {
   CodexTokenManager,
 } from "@imagegencli/providers-codex";
 import { helpFor } from "./help.js";
-import { skillText } from "./skill.js";
+import { installSkill, SkillExistsError, skillText } from "./skill.js";
 
 const EXIT_USAGE = 2;
 const EXIT_AUTH = 3;
@@ -51,14 +51,14 @@ function parseArgs(argv: string[]): { flags: Map<string, string | boolean | stri
     }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "no-open", "show-path"].includes(key)) {
+      if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "no-open", "show-path", "target", "force"].includes(key)) {
         fail("usage", `Unknown option --${key}. Run imagegen help.`, EXIT_USAGE);
       }
-      if (key === "no-open" || key === "show-path") {
+      if (key === "no-open" || key === "show-path" || key === "force") {
         flags.set(key, true);
         continue;
       }
-      if (key === "reference" || key === "provider") {
+      if (key === "reference" || key === "provider" || key === "target") {
         const value = argv[i + 1];
         if (!value || value.startsWith("--")) fail("usage", `Missing value for --${key}.`, EXIT_USAGE);
         i += 1;
@@ -379,6 +379,20 @@ async function main(): Promise<void> {
     }
     if (command === "skill" && !sub) {
       process.stdout.write(await skillText());
+      return;
+    }
+    if (command === "skill" && sub === "install" && !subSub) {
+      const targets = flags.get("target");
+      if (!Array.isArray(targets) || targets.length === 0) {
+        fail("usage", "Missing --target. Run imagegen help skill.", EXIT_USAGE);
+      }
+      try {
+        const installed = await installSkill(targets, flags.get("force") === true);
+        process.stdout.write(`${JSON.stringify({ skill: "imagegen-cli", installed })}\n`);
+      } catch (error) {
+        if (error instanceof SkillExistsError) fail("usage", error.message, EXIT_USAGE);
+        fail("io", error instanceof Error ? error.message : String(error), EXIT_IO);
+      }
       return;
     }
     if (command === "providers" && !sub) {

@@ -68,7 +68,14 @@ For Claude Code across all projects, add this to `~/.claude/CLAUDE.md` (on Windo
 When I ask you to create or edit an image, run `imagegen skill` and follow its instructions. Use the installed `imagegen` CLI unless I explicitly choose another tool.
 ```
 
-For native skill discovery, save the output of `imagegen skill` as `~/.claude/skills/imagegen-cli/SKILL.md` for Claude Code or `~/.agents/skills/imagegen-cli/SKILL.md` for Codex. Refresh those copies after updating the npm package. The short global instruction is enough if you prefer not to maintain skill copies.
+For native skill discovery, install the skill into one or more harnesses:
+
+```sh
+imagegen skill install --target claude --target codex
+imagegen skill install --target ./my-agent/skills
+```
+
+`claude` installs to `~/.claude/skills/imagegen-cli/SKILL.md`; `codex` installs to `~/.agents/skills/imagegen-cli/SKILL.md`. A path target is the parent skills directory. The command prints JSON with the installed paths. Run it again after updating the npm package; if the existing skill differs, pass `--force` to replace it. The short global instruction above is enough if you prefer not to install a native skill.
 
 ## Image models
 

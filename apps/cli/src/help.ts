@@ -51,6 +51,7 @@ Usage:
   imagegen edit --prompt <text> --source <file> [--mask <file>] --out <path|dir> [--provider <name>] [options]
   imagegen providers
   imagegen skill
+  imagegen skill install --target <claude|codex|skills-dir> [--target <...>] [--force]
   imagegen help [command]
 
 ${IMAGE_OPTIONS}
@@ -117,12 +118,19 @@ Usage:
 
 Prints JSON with each provider and whether it is configured.
 `,
-  skill: `imagegen skill - print the reusable agent skill as Markdown
+  skill: `imagegen skill - print or install the reusable agent skill
 
 Usage:
   imagegen skill
+  imagegen skill install --target <claude|codex|skills-dir> [--target <...>] [--force]
 
-Prints SKILL.md content for use in agent skills directories or global instructions.
+Without install, prints SKILL.md as Markdown. Install accepts repeatable targets:
+  claude          ~/.claude/skills/imagegen-cli/SKILL.md
+  codex           ~/.agents/skills/imagegen-cli/SKILL.md
+  <skills-dir>    <skills-dir>/imagegen-cli/SKILL.md
+
+Install prints JSON with each path and status. Existing different content is
+preserved unless --force is passed.
 `,
   help: `imagegen help - show human-readable usage
 
