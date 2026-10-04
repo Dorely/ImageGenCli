@@ -60,7 +60,7 @@ Codex login starts a temporary server on `localhost:1455`, opens the browser for
 
 ## Agent skill
 
-`imagegen skill` prints a reusable `SKILL.md` from the installed npm package. The skill explains when and how to use `imagegen`, including generation, edits, provider setup, and JSON results. It works as plain instructions in any agent harness that can run a shell command.
+`imagegen skill` prints a reusable `SKILL.md` from the installed npm package. The skill covers generation, edits, provider setup, JSON results, Flare/Sunburst selection, and native alpha transparency with verification. It works as plain instructions in any agent harness that can run a shell command.
 
 For Claude Code across all projects, add this to `~/.claude/CLAUDE.md` (on Windows, `%USERPROFILE%\.claude\CLAUDE.md`):
 
@@ -90,6 +90,8 @@ Both `generate` and `edit` accept `--model <id>`. Run `imagegen help`, `imagegen
 Use full model IDs. Other provider-supported IDs remain accepted; actual account availability is determined by Codex. Unsupported models fail without automatic fallback. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, `IMAGEGEN_CODEX_IMAGE_MODEL`, then Flare. The orchestration model is configured separately.
 
 Quality defaults to `auto`. See the [official image tool documentation](https://developers.openai.com/api/docs/guides/tools-image-generation#tool-options).
+
+For native transparent assets, use a 2.5 model, PNG or WebP, and explicitly request real alpha transparency in the prompt. The Codex CLI keeps the tool background on `auto`; it does not expose `--background`. Check the decoded alpha channel before accepting a cutout, and repeat the transparency requirement during later edits. See the [packaged skill](apps/cli/skill/SKILL.md) for examples and model guidance.
 
 ```sh
 imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp
