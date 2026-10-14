@@ -12,7 +12,7 @@ Verified 2026-10-14 against Google's official documentation. These notes record 
 
 ## Wire shape and deliverables
 
-The [Interactions reference](https://ai.google.dev/api/interactions-api) specifies `x-goog-api-key`, text and base64 image input blocks, `response_format` with `type: image`, `delivery: inline`, `aspect_ratio`, and `image_size`. It provides no image quality or mask field. CLI quality other than auto and edit masks are rejected.
+The [Interactions reference](https://ai.google.dev/api/interactions-api) specifies `x-goog-api-key`, text and base64 image input blocks, `response_format` with `type: image`, `aspect_ratio`, and `image_size`. Although the reference lists `delivery: inline`, a live request on 2026-10-14 returned HTTP 400, "Image delivery mode is not supported." The implementation therefore omits `delivery` and consumes default inline base64 image output. It provides no image quality or mask field. CLI quality other than auto and edit masks are rejected.
 
 The guide includes PNG output MIME examples, but the reference currently enumerates only JPEG as a selectable output MIME. To avoid undocumented fields, request JPEG explicitly for JPEG deliverables and omit MIME selection for PNG/WebP. Validate returned MIME against image metadata and transcode only when necessary, without resizing. Matching formats retain original bytes. Dimensions come from actual image metadata.
 
@@ -30,4 +30,4 @@ The image guide recommends descriptive scenes, specificity, context and intent, 
 
 [API key documentation](https://ai.google.dev/gemini-api/docs/api-key) describes key creation in AI Studio and header authentication. This app uses its established login/status/logout and OS vault/file persistence conventions rather than environment-variable credentials. Key entry is hidden or explicitly read from stdin; status checks local configuration only. Credential shapes stay in provider boundaries.
 
-Validation uses isolated stores, mocked transports, and generated image fixtures. No paid request or real user credential access is required by tests. A live model smoke test remains optional after the user configures a key.
+Validation uses isolated stores, mocked transports, and generated image fixtures. No paid request or real user credential access is required by tests. A live request after key configuration reproduced the unsupported delivery-field error on 2026-10-14; subsequent verification uses the corrected payload.

@@ -94,9 +94,10 @@ export class GeminiImageProvider {
           data: Buffer.from(i.data).toString("base64"),
         })),
       ],
+      // The live image endpoint rejects delivery even though the reference lists it.
+      // Omit it and consume the default base64 response.
       response_format: {
         type: "image",
-        delivery: "inline",
         ...(format === "jpeg" ? { mime_type: "image/jpeg" } : {}),
         ...(size.aspectRatio ? { aspect_ratio: size.aspectRatio } : {}),
         ...(size.imageSize ? { image_size: size.imageSize } : {}),

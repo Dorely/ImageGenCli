@@ -63,7 +63,6 @@ describe("Gemini transport", () => {
       input: [{ type: "text", text: request.prompt }],
       response_format: {
         type: "image",
-        delivery: "inline",
         aspect_ratio: "16:9",
         image_size: "1K",
       },
@@ -99,7 +98,6 @@ describe("Gemini transport", () => {
     );
     expect(payload.response_format).toEqual({
       type: "image",
-      delivery: "inline",
     });
   });
   it.each(["png", "jpeg", "webp"] as const)(
