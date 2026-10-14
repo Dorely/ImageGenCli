@@ -25,7 +25,8 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@imagegencli/core": "0.1.3"
+    "@imagegencli/core": "0.1.3",
+    "@imagegencli/credentials": "0.1.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -7,7 +7,7 @@ ImageGenCli is a provider-agnostic command-line tool for programmatic image gene
 ## Current Status
 
 - Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex Responses API (default `gpt-image-2.5-flare`, with Sunburst and `gpt-image-2` selectable).
-- Next: Google API-key provider, then additional providers behind the same contracts.
+- Gemini provider implemented: stored API key, stateless Interactions API generation, references, independent edits, native-size normalization, and PNG/JPEG/WebP delivery.
 
 ## Install
 
@@ -54,7 +54,7 @@ imagegen skill
 imagegen help [command]
 ```
 
-Each provider has its own auth namespace (`auth codex ...`, later `auth gemini ...`); several can stay configured at once. `generate` and `edit` take a repeatable `--provider` flag: omit it when only one provider is configured, pass one or more names otherwise. Multi-provider runs write `<provider>-`-prefixed files and print one JSON result per provider.
+Each provider has its own auth namespace (`auth codex ...`, `auth gemini ...`); several can stay configured at once. `generate` and `edit` take a repeatable `--provider` flag: omit it when only one provider is configured, pass one or more names otherwise. Multi-provider runs write `<provider>-`-prefixed files and print one JSON result per provider.
 
 Codex login starts a temporary server on `localhost:1455`, opens the browser for OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth codex status --show-path`). `auth codex logout` removes them.
 
@@ -119,7 +119,7 @@ ImageGenCli follows the architecture direction in `VISION.md`:
 ## Development Notes
 
 - Keep provider-specific transport details behind provider-neutral contracts.
-- Never log, print, or persist secrets (API keys, authorization codes, tokens).
+- Never log or print secrets; persist credentials only inside the provider credential store.
 - Update `FILEMAP.md` whenever source files are added, removed, renamed, or significantly repurposed.
 - Read `VISION.md` and `FILEMAP.md` before making substantive changes.
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a public contribution.
@@ -128,3 +128,23 @@ ImageGenCli follows the architecture direction in `VISION.md`:
 ## License
 
 ImageGenCli is open source under the [MIT License](LICENSE).
+
+## Gemini setup and image generation
+
+Create an API key in [Google AI Studio](https://aistudio.google.com/apikey), then run:
+
+```sh
+imagegen auth gemini login
+imagegen auth gemini status --show-path
+imagegen generate --provider gemini --size 16:9 --prompt "A lighthouse at dawn, warm light, wide coastal composition" --out ./gemini.png
+imagegen edit --provider gemini --source ./gemini.png --prompt "Change only the sky to dusk; preserve the lighthouse and composition" --out ./dusk.png
+imagegen auth gemini logout
+```
+
+Login accepts hidden terminal input or explicit `--key-stdin` for scripts using a secure input source. Do not put keys in command arguments. Credentials use the existing OS vault and file fallback; status indicates local configuration without validating access or making a paid request. Gemini credentials remain separate from Codex tokens.
+
+The default is `gemini-nano-banana-2.1`; override with `--model` or `IMAGEGEN_GEMINI_IMAGE_MODEL` (CLI takes precedence). Precision work can select `gemini-3-pro-image`. Existing `gemini-3.1-flash-image` and `gemini-2.5-flash-image` workflows are supported. Other model IDs are forwarded without fallback; unknown models use the default native-size policy and may reject incompatible options.
+
+Gemini accepts `--quality auto` only and rejects masks. Sizes normalize to the nearest model-native aspect ratio and then resolution by pixel distance, with smaller output winning resolution ties. Presets and aspect-only sizes use 1K; `auto` leaves aspect and resolution to the model. Files retain actual output dimensions, reported in JSON. Format conversion uses sharp without resizing; native alpha transparency is not promised. Four reference images are allowed, plus an edit source; the legacy 2.5 model is limited to three inputs total by this tool.
+
+Each count item is a separate request returning its last final image. Calls use `store: false`, have a 180-second request timeout, and do not retry automatically. Errors distinguish authentication (exit 3), usage (exit 2), and provider failures (exit 4). No conversation continuation, search grounding, or batch jobs are enabled. For prompting and verified transparency workflows, see the packaged skill. Research and API decisions are recorded in [Gemini integration notes](docs/gemini-research.md).

@@ -1,0 +1,37 @@
+{
+  "name": "@imagegencli/providers-google",
+  "version": "0.1.3",
+  "private": true,
+  "license": "MIT",
+  "description": "Gemini Interactions image provider.",
+  "author": "Dorely",
+  "homepage": "https://github.com/Dorely/ImageGenCli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dorely/ImageGenCli.git"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@imagegencli/core": "0.1.3",
+    "@imagegencli/credentials": "0.1.3",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.4"
+  }
+}

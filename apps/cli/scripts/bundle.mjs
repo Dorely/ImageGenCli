@@ -8,7 +8,7 @@ await build({
   target: "node20",
   format: "esm",
   outfile: "dist/index.mjs",
-  external: ["keytar", "open"],
+  external: ["keytar", "open", "sharp"],
   sourcemap: true,
   logLevel: "info",
 });

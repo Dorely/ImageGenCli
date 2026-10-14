@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@imagegencli/providers-google", () => ({ createGeminiEntry: () => ({ provider: { name: "gemini" }, authStatus: async () => ({ name: "gemini", configured: false }) }) }));
+
 const state = vi.hoisted(() => ({ payloads: [] as { tools: Record<string, unknown>[] }[] }));
 // A one-pixel PNG fixture for byte-preserving file output.
 const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=";

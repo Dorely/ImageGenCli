@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
@@ -18,8 +20,20 @@
   },
   "files": [],
   "references": [
-    { "path": "./apps/cli" },
-    { "path": "./packages/core" },
-    { "path": "./packages/providers-codex" }
+    {
+      "path": "./apps/cli"
+    },
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/providers-codex"
+    },
+    {
+      "path": "./packages/providers-google"
+    },
+    {
+      "path": "./packages/credentials"
+    }
   ]
 }

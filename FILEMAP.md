@@ -48,7 +48,7 @@
 | `apps/cli/tsconfig.json` | TypeScript project settings for the CLI app. |
 | `apps/cli/scripts/bundle.mjs` | esbuild bundler producing the self-contained publishable CLI. |
 | `apps/cli/src/index.ts` | CLI entry point: arg parsing, auth/generate/edit/help wiring, JSON reporting. |
-| `apps/cli/src/help.ts` | Shared image options, supported Codex models, and examples for general and command help. |
+| `apps/cli/src/help.ts` | Shared image options, supported Codex/Gemini models, and examples for general and command help. |
 | `apps/cli/src/skill.ts` | Loads and installs the packaged agent skill for the `imagegen skill` command. |
 | `apps/cli/skill/SKILL.md` | Packaged agent instructions for CLI use, model selection, native alpha transparency, and image verification. |
 
@@ -83,7 +83,7 @@
 | `packages/providers-codex/src/codex-auth.ts` | PKCE flow state, token exchange, refresh, and expiry helpers. |
 | `packages/providers-codex/src/codex-auth.test.ts` | Regression tests for token-expiry helpers. |
 | `packages/providers-codex/src/codex-token-manager.ts` | Token lifecycle: exchange, cached access, serialized refresh. |
-| `packages/providers-codex/src/token-store.ts` | Vault-first token store with restricted-file fallback. |
+| `packages/providers-codex/src/token-store.ts` | Codex validation adapter over shared vault/file credential persistence. |
 | `packages/providers-codex/src/account-id.ts` | ChatGPT account-id extraction from the access JWT. |
 | `packages/providers-codex/src/account-id.test.ts` | Regression tests for account-id extraction. |
 | `packages/providers-codex/src/codex-client.ts` | Responses API image provider (generate/edit, streaming). |
@@ -92,3 +92,22 @@
 | `packages/providers-codex/src/codex-entry.ts` | Registry entry wiring the Codex provider and auth status. |
 | `packages/providers-codex/src/sse.ts` | SSE parsing and image-error classification. |
 | `packages/providers-codex/src/sse.test.ts` | Regression tests for SSE parsing and error kinds. |
+
+## Shared Credentials and Gemini Provider
+
+| File | Description |
+|------|-------------|
+| `apps/cli/src/key-input.ts` | Hidden terminal key input and explicit bounded stdin input. |
+| `docs/gemini-research.md` | Dated official-source research, API mappings, limits, and prompting decisions. |
+| `packages/credentials/package.json` | Shared credential persistence workspace metadata and tests. |
+| `packages/credentials/tsconfig.json` | Shared persistence TypeScript build settings. |
+| `packages/credentials/src/index.ts` | Generic provider records in the existing vault and restricted-file location. |
+| `packages/credentials/src/index.test.ts` | Storage compatibility, fallback, and provider-isolation tests. |
+| `packages/providers-google/package.json` | Gemini workspace metadata, sharp dependency, and test scripts. |
+| `packages/providers-google/tsconfig.json` | Gemini provider TypeScript project references. |
+| `packages/providers-google/src/index.ts` | Gemini registry entry and provider exports. |
+| `packages/providers-google/src/auth.ts` | Gemini API-key record, validation, and stored credential access. |
+| `packages/providers-google/src/image-size.ts` | Model-specific native-raster tables and size normalization. |
+| `packages/providers-google/src/gemini-client.ts` | Stateless Interactions transport, response validation, and format conversion. |
+| `packages/providers-google/src/gemini-client.test.ts` | Mock transport, error, timeout, format, and native-size tests. |
+| `packages/providers-google/src/cli-integration.test.ts` | Isolated CLI auth, routing, multi-provider output, and hidden-input tests. |

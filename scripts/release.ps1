@@ -21,8 +21,10 @@ try {
   }
   $coreVersion = node -p "require('./packages/core/package.json').version"
   $codexVersion = node -p "require('./packages/providers-codex/package.json').version"
-  if ($coreVersion -ne $version -or $codexVersion -ne $version) {
-    throw "Package versions must match: cli=$version core=$coreVersion providers-codex=$codexVersion."
+  $googleVersion = node -p "require('./packages/providers-google/package.json').version"
+  $credentialsVersion = node -p "require('./packages/credentials/package.json').version"
+  if ($coreVersion -ne $version -or $codexVersion -ne $version -or $googleVersion -ne $version -or $credentialsVersion -ne $version) {
+    throw "Package versions must match: cli=$version core=$coreVersion providers-codex=$codexVersion providers-google=$googleVersion credentials=$credentialsVersion."
   }
 
   if ($ExpectedTag -and $ExpectedTag -ne "v$version") {

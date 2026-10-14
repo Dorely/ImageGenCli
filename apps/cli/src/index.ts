@@ -27,6 +27,8 @@ import {
   waitForOAuthCallback,
   CodexTokenManager,
 } from "@imagegencli/providers-codex";
+import { createGeminiEntry, geminiStore, storedKey, validateKey } from "@imagegencli/providers-google";
+import { readApiKey } from "./key-input.js";
 import { helpFor } from "./help.js";
 import { installSkill, SkillExistsError, skillText } from "./skill.js";
 
@@ -51,10 +53,10 @@ function parseArgs(argv: string[]): { flags: Map<string, string | boolean | stri
     }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "no-open", "show-path", "target", "force"].includes(key)) {
+      if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "key-stdin", "no-open", "show-path", "target", "force"].includes(key)) {
         fail("usage", `Unknown option --${key}. Run imagegen help.`, EXIT_USAGE);
       }
-      if (key === "no-open" || key === "show-path" || key === "force") {
+      if (key === "key-stdin" || key === "no-open" || key === "show-path" || key === "force") {
         flags.set(key, true);
         continue;
       }
@@ -154,6 +156,7 @@ function parseCount(flags: Map<string, string | boolean | string[]>): number {
 function registry(): ProviderRegistry {
   const registry = new ProviderRegistry();
   registry.register(createCodexEntry());
+  registry.register(createGeminiEntry());
   return registry;
 }
 
@@ -211,6 +214,52 @@ async function saveImages(result: ProviderResult, paths: string[]): Promise<void
     } catch {
       fail("io", `Could not write output file: ${path}`, EXIT_IO);
     }
+  }
+}
+
+async function runGeminiAuth(
+  action: string,
+  flags: Map<string, string | boolean | string[]>,
+): Promise<void> {
+  try {
+    const store = await geminiStore();
+    if (action === "login") {
+      const apiKey = validateKey(
+        await readApiKey(flags.get("key-stdin") === true),
+      );
+      if (store.describe().backend === "file")
+        process.stderr.write(
+          "Warning: OS vault unavailable; credentials stored in a restricted file. Use auth gemini status --show-path to inspect.\n",
+        );
+      await store.save("gemini", { apiKey });
+      process.stdout.write(
+        `${JSON.stringify({ provider: "gemini", status: "connected" })}\n`,
+      );
+    } else if (action === "logout") {
+      await store.clear("gemini");
+      process.stdout.write(
+        `${JSON.stringify({ provider: "gemini", status: "disconnected" })}\n`,
+      );
+    } else {
+      let connected = false;
+      try {
+        await storedKey(store);
+        connected = true;
+      } catch (error) {
+        if (!(error instanceof ProviderError)) throw error;
+      }
+      process.stdout.write(
+        `${JSON.stringify({ provider: "gemini", connected, ...(flags.get("show-path") ? { store: store.describe() } : {}) })}\n`,
+      );
+    }
+  } catch (error) {
+    fail(
+      "auth",
+      error instanceof ProviderError
+        ? error.message
+        : "Could not access Gemini credentials. Check the credential store and retry login.",
+      EXIT_AUTH,
+    );
   }
 }
 
@@ -354,6 +403,7 @@ async function runImageRequest(request: GenerateRequest, edit: EditRequest | und
     } catch (error) {
       if (error instanceof ReauthRequiredError) fail("auth", `${entry.provider.name}: ${error.message}`, EXIT_AUTH);
       if (error instanceof ProviderError) {
+        if (error.kind === "auth") fail("auth", `${entry.provider.name}: ${error.message}`, EXIT_AUTH);
         if (error.kind === "configuration" || error.kind === "usage") fail(error.kind, `${entry.provider.name}: ${error.message}`, EXIT_USAGE);
         fail("provider", `${entry.provider.name}: ${error.kind}: ${error.message}`, EXIT_PROVIDER);
       }
@@ -372,6 +422,9 @@ async function main(): Promise<void> {
     return;
   }
   const [command, sub, subSub] = positionals;
+  if (flags.has("key-stdin") && !(command === "auth" && sub === "gemini" && subSub === "login")) {
+    fail("usage", "--key-stdin is only supported by auth gemini login.", EXIT_USAGE);
+  }
   try {
     if (command === "help") {
       process.stdout.write(helpFor(sub));
@@ -401,6 +454,10 @@ async function main(): Promise<void> {
     }
     if (command === "auth" && sub && !subSub) {
       fail("usage", `Missing auth action. Usage: imagegen auth ${sub} login|status|logout.`, EXIT_USAGE);
+    }
+    if (command === "auth" && sub === "gemini" && ["login", "status", "logout"].includes(subSub)) {
+      await runGeminiAuth(subSub, flags);
+      return;
     }
     if (command === "auth" && sub) {
       if (subSub === "login") {
