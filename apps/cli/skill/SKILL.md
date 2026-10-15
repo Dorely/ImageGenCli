@@ -8,7 +8,7 @@ description: Create or edit bitmap images with the installed `imagegen` CLI (`@d
 Use the installed `imagegen` command to turn the user's prompt into image files. The CLI handles provider selection and credentials. Follow an explicit user choice of another image tool.
 
 1. Check that `imagegen` is available. If it is missing, tell the user to install it with `npm install -g @dorely13/ai-imagegen-cli`.
-2. Run `imagegen providers` to see which provider is configured. If none is configured, have the user run `imagegen auth codex login` for browser OAuth or `imagegen auth gemini login` for hidden API-key entry. Credentials use the OS vault with a file fallback. Do not ask the user to paste keys into chat or put them in shell arguments; scripted setup can use explicit `--key-stdin` from an existing secure input source.
+2. Run `imagegen providers` to see which provider is configured. If none is configured, have the user run `imagegen auth codex login` for browser OAuth or `imagegen auth gemini login` for hidden API-key entry. Named API profiles use `imagegen auth <name> login`; see the endpoint guidance below. Credentials use the OS vault with a file fallback. Do not ask the user to paste keys into chat or put them in shell arguments; scripted setup can use explicit `--key-stdin` from an existing secure input source.
 3. For a new image, run `imagegen generate --prompt "<user's image brief>" --out <output-path>`. For an edit, run `imagegen edit --source <existing-image> --prompt "<requested change>" --out <output-path>`. Use repeatable `--reference <file>` for visual references or continuity. Preserve the user's requested format, size, count, and output location using the corresponding CLI options.
 4. Read `imagegen help generate` or `imagegen help edit` for current option details when needed. Follow the model and transparency guidance below. If several providers are configured, select one with `--provider`.
 5. Parse the JSON result and use each `images[].path` as the generated file location. Check that the file exists and inspect the result against the brief before showing or referencing it. `imageModel` reports the selected model; successful JSON does not certify image quality or transparency. If the command fails, report the CLI error and the action needed to resolve it.
@@ -76,3 +76,25 @@ imagegen edit --provider gemini --source ./mug.png --prompt "Change only the mug
 ```
 
 Sources: [Google image generation and prompting](https://ai.google.dev/gemini-api/docs/image-generation), [Interactions API](https://ai.google.dev/gemini-api/docs/interactions-overview), and [API reference](https://ai.google.dev/api/interactions-api). Public API examples are not CLI flags; consult installed help.
+
+## Named endpoints: OpenRouter and compatible image APIs
+
+Run `imagegen providers` to find saved profiles as well as Codex/Gemini. Select profiles by their saved name with `--provider`; keep an explicit user choice of provider and model. This tool supports the OpenRouter dedicated Images API and OpenAI Images JSON/multipart protocols. A generic URL does not make fal, Replicate, or another service's job API compatible.
+
+For setup, use `imagegen providers add <name> --api openrouter --model <model-id>`, or `--api openai-images --base-url <url-with-api-prefix> --model <model-id>`. These are non-secret configuration commands. Have the user run `imagegen auth <name> login` for hidden key entry; do not put keys in command arguments or chat. An explicitly unauthenticated local gateway can use `--auth none`. Update settings with `providers update`, inspect them with `providers show`, and remove profiles and credentials with `providers remove`. Logout removes credentials while retaining configuration. Changing the URL's origin clears credentials.
+
+Use `imagegen models --provider <name>` when model IDs or supported features need discovery. OpenRouter supplies image models and capability metadata. Generic endpoint `/models` catalogs do not prove image support: their capabilities are marked unknown. Do not assume that a catalog model supports edits, masks, transparency, references, quality tiers, or a particular size. Generation itself performs no discovery. `--model` overrides a profile's default; if neither exists, ask for or discover an appropriate model ID.
+
+- Keep prompts coherent and specific, identify each reference's role, and quote exact lettering. Model-specific guidance applies only when that model's documentation supports it; Codex's native-alpha advice does not establish transparency for every gateway or image model.
+- OpenRouter accepts pixel sizes or aspect ratios; OpenAI Images-compatible profiles accept pixels and presets, with arbitrary aspect-only sizes rejected. Presets are square 1024x1024, portrait 1024x1536, landscape 1536x1024, and wide 1536x864; models may reject particular dimensions. Omit size/quality for endpoint defaults rather than assuming Codex's normalization rules.
+- References on OpenAI-compatible generation use its edit endpoint. For edits, image 1 is the source and following images are references. OpenRouter supports reference-guided edits but no mask field; use masks only with an endpoint/model that implements OpenAI Images edits. Keep within the tool's four-reference limit and any lower model limit.
+- Each CLI call is independent. Use the previous result as `--source` for follow-up changes. Count makes separate requests; report errors without automatic retries or model substitution.
+- The CLI verifies PNG/JPEG/WebP bytes, measures dimensions, and converts formats without resizing. Inspect output before delivery. Format conversion does not create alpha, and a successful API call does not prove fidelity, transparency, or correct text.
+
+```sh
+imagegen models --provider openrouter
+imagegen generate --provider openrouter --model <discovered-model-id> --size 16:9 --prompt "A cinematic coastal lighthouse at dawn, soft mist, warm light and generous sky" --out ./lighthouse.png
+imagegen edit --provider my-gateway --source ./lighthouse.png --prompt "Change only the sky to dusk. Preserve the lighthouse, coastline, composition, and lighting on the building." --out ./dusk.png
+```
+
+Protocol references: [OpenRouter Images](https://openrouter.ai/docs/guides/overview/multimodal/image-generation) and [OpenAI Images](https://developers.openai.com/api/docs/guides/image-generation). Use the installed CLI help for actual options.

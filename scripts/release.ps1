@@ -23,8 +23,9 @@ try {
   $codexVersion = node -p "require('./packages/providers-codex/package.json').version"
   $googleVersion = node -p "require('./packages/providers-google/package.json').version"
   $credentialsVersion = node -p "require('./packages/credentials/package.json').version"
-  if ($coreVersion -ne $version -or $codexVersion -ne $version -or $googleVersion -ne $version -or $credentialsVersion -ne $version) {
-    throw "Package versions must match: cli=$version core=$coreVersion providers-codex=$codexVersion providers-google=$googleVersion credentials=$credentialsVersion."
+  $configurableVersion = node -p "require('./packages/providers-configurable/package.json').version"
+  if ($coreVersion -ne $version -or $codexVersion -ne $version -or $googleVersion -ne $version -or $credentialsVersion -ne $version -or $configurableVersion -ne $version) {
+    throw "Package versions must match: cli=$version core=$coreVersion providers-codex=$codexVersion providers-google=$googleVersion credentials=$credentialsVersion providers-configurable=$configurableVersion."
   }
 
   if ($ExpectedTag -and $ExpectedTag -ne "v$version") {

@@ -7,6 +7,7 @@ export async function readApiKey(
   fromStdin: boolean,
   input: NodeJS.ReadStream = process.stdin,
   output: NodeJS.WriteStream = process.stderr,
+  providerName = "gemini",
 ): Promise<string> {
   if (fromStdin) {
     let text = "";
@@ -18,7 +19,9 @@ export async function readApiKey(
     return text;
   }
   if (!input.isTTY)
-    throw failure("Gemini login requires a terminal, or explicit --key-stdin.");
+    throw failure(
+      "API-key login requires a terminal, or explicit --key-stdin.",
+    );
   const terminal = input as ReadStream;
   const wasRaw = terminal.isRaw;
   const wasFlowing = input.readableFlowing === true;
@@ -35,7 +38,7 @@ export async function readApiKey(
     };
     const onEnd = () => {
       cleanup();
-      reject(failure("Gemini login cancelled before a key was entered."));
+      reject(failure("API-key login cancelled before a key was entered."));
     };
     const onError = () => {
       cleanup();
@@ -64,7 +67,7 @@ export async function readApiKey(
         reject(failure("API key input is too long."));
       }
     };
-    output.write("Gemini API key (hidden): ");
+    output.write(`${providerName} API key (hidden): `);
     input.on("keypress", onKey);
     input.once("end", onEnd);
     input.once("error", onError);

@@ -148,3 +148,28 @@ The default is `gemini-nano-banana-2.1`; override with `--model` or `IMAGEGEN_GE
 Gemini accepts `--quality auto` only and rejects masks. Sizes normalize to the nearest model-native aspect ratio and then resolution by pixel distance, with smaller output winning resolution ties. Presets and aspect-only sizes use 1K; `auto` leaves aspect and resolution to the model. Files retain actual output dimensions, reported in JSON. Format conversion uses sharp without resizing; native alpha transparency is not promised. Four reference images are allowed, plus an edit source; the legacy 2.5 model is limited to three inputs total by this tool.
 
 Each count item is a separate request returning its last final image. Calls use `store: false`, have a 180-second request timeout, and do not retry automatically. Errors distinguish authentication (exit 3), usage (exit 2), and provider failures (exit 4). No conversation continuation, search grounding, or batch jobs are enabled. For prompting and verified transparency workflows, see the packaged skill. Research and API decisions are recorded in [Gemini integration notes](docs/gemini-research.md).
+
+## Named image API endpoints
+
+Save a profile for OpenRouter or a gateway using the OpenAI Images API format:
+
+```sh
+imagegen providers add openrouter --api openrouter --model <image-model-id>
+imagegen auth openrouter login
+imagegen models --provider openrouter
+imagegen generate --provider openrouter --prompt "A lighthouse at dawn" --out ./router.png
+
+imagegen providers add my-gateway --api openai-images --base-url https://example.com/v1 --model <image-model-id>
+imagegen auth my-gateway login
+imagegen generate --provider my-gateway --prompt "A lighthouse at dawn" --out ./gateway.png
+```
+
+`providers show <name>` prints non-secret configuration; `providers update <name>` accepts the same settings as add; `providers remove <name>` deletes the profile and its saved key. Names use lowercase letters, digits, and hyphens; `codex` and `gemini` are reserved. OpenRouter supplies `https://openrouter.ai/api/v1`; other profiles require a base URL including the API prefix. The adapters append `/images` (OpenRouter) or `/images/generations` and `/images/edits` (OpenAI Images).
+
+Profiles live in a version-1 `providers.json` next to the existing credential file. Keys remain in the OS vault with file fallback. `auth <name> login` accepts hidden entry or explicit `--key-stdin`; `status --show-path` reports the credential backend without a key; logout preserves profile settings. Changing the endpoint origin clears its saved key. Profiles default to `--auth bearer`; use `--auth none` for an endpoint without authentication. URLs require HTTPS except loopback HTTP; embedded credentials, queries, and fragments are rejected in base URLs. Signed output-image download URLs may contain queries and are never printed by the adapter or sent API authentication headers.
+
+The model is `--model` when supplied, otherwise the profile default; one is required. `models --provider <name>` is an explicit network request: OpenRouter returns image model IDs and reported supported parameters, while a generic `/models` listing reports capabilities as unknown. Generation makes no hidden model-discovery calls.
+
+Portable flags retain their existing meaning, with model-specific limits. OpenRouter supports aspect ratios and pixel dimensions; generic OpenAI Images endpoints accept pixels or presets (square 1024x1024, portrait 1024x1536, landscape 1536x1024, wide 1536x864), and arbitrary aspect-only sizes are rejected. Automatic/default fields are omitted. Quality and output format are sent only when explicitly requested; unsupported model options produce endpoint errors. PNG/JPEG/WebP are verified deliverables, with format conversion but no local resizing. The JSON dimensions describe actual returned pixels.
+
+References go through OpenRouter `input_references` or OpenAI multipart edits. Editing keeps source first, followed by references. Masks are available only for OpenAI Images-compatible endpoints that implement them. Four references, an additional edit source, and counts from one to four are supported by the CLI; a particular model may accept less. Count invokes separate single-image requests; there are no automatic paid retries, model substitutions, conversational sessions, or arbitrary request templates. Requests and image downloads share a 180-second timeout per count item. See [API compatibility research](docs/configurable-api-research.md) and the packaged skill for provider/model selection.

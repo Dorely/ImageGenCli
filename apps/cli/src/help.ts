@@ -1,3 +1,35 @@
+const PROFILE_HELP = `Named endpoint profiles:
+  imagegen providers add <name> --api <openrouter|openai-images> [--base-url <url>]
+                         [--model <id>] [--auth <bearer|none>]
+  imagegen providers show <name>
+  imagegen providers update <name> [--api <format>] [--base-url <url>]
+                         [--model <id>] [--auth <bearer|none>]
+  imagegen providers remove <name>
+  imagegen auth <name> login [--key-stdin]
+  imagegen auth <name> status [--show-path]
+  imagegen auth <name> logout
+  imagegen models --provider <name>
+
+OpenRouter defaults to https://openrouter.ai/api/v1. openai-images requires
+--base-url including the API prefix (e.g. https://api.openai.com/v1).
+Keys use hidden terminal input or explicit --key-stdin and the existing vault/file
+store. --auth none supports endpoints without keys. Config is saved in providers.json
+alongside the credential file. Origin changes clear the saved key; removing a
+profile removes its credentials. Logout preserves profile configuration.
+
+Select named profiles with --provider. Model precedence: --model > profile default;
+provide one if no default is saved. models explicitly discovers model metadata;
+OpenAI-compatible model listings do not establish image capabilities.
+
+Supported protocols: OpenRouter dedicated Images API and OpenAI Images JSON /
+multipart endpoints, not arbitrary HTTP templates. Options vary by model.
+OpenRouter accepts aspect ratios; openai-images needs pixels or presets:
+square 1024x1024, portrait 1024x1536, landscape 1536x1024, wide 1536x864.
+Auto options are omitted. Native masks require openai-images or Codex.
+Outputs are measured and converted to PNG/JPEG/WebP without resizing. Count uses
+separate single-image requests without automatic retries or model substitution.
+`;
+
 const IMAGE_OPTIONS = `Image options (generate, edit):
   --prompt <text>        Prompt text (required)
   --out <path|dir>       Output file or directory (required)
@@ -47,7 +79,7 @@ const GENERATE_EXAMPLES = `Examples:
 
 const EDIT_EXAMPLES = `Edit options:
   --source <file>        Source image (required)
-  --mask <file>          Optional edit mask (Codex only)
+  --mask <file>          Optional edit mask (Codex or openai-images)
 
 Examples:
   imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp
@@ -66,16 +98,18 @@ Usage:
   imagegen generate --prompt <text> --out <path|dir> [--provider <name>] [options]
   imagegen edit --prompt <text> --source <file> [--mask <file>] --out <path|dir> [--provider <name>] [options]
   imagegen providers
+  imagegen models --provider <profile-name>
   imagegen skill
   imagegen skill install --target <claude|codex|skills-dir> [--target <...>] [--force]
   imagegen help [command]
 
+${PROFILE_HELP}
 ${IMAGE_OPTIONS}
 ${GENERATE_EXAMPLES}
 ${EDIT_EXAMPLES}
 
 Auth options:
-  --key-stdin           Read Gemini API key from explicit stdin; otherwise hidden
+  --key-stdin           Read an API key from explicit stdin; otherwise hidden
                          terminal entry. Keys are stored in the vault/file fallback.
   --timeout <minutes>    Login wait timeout (default 10)
   --no-open              Print the URL without opening a browser
@@ -87,6 +121,8 @@ Global:
 
 const COMMAND_HELP: Record<string, string> = {
   auth: `imagegen auth - manage provider credentials (one namespace per provider)
+
+${PROFILE_HELP}
 
 Usage:
   imagegen auth gemini login [--key-stdin]
@@ -129,6 +165,7 @@ Usage:
 Usage:
   imagegen generate --prompt <text> --out <path|dir> [--provider <name>] [options]
 
+${PROFILE_HELP}
 ${IMAGE_OPTIONS}
 ${GENERATE_EXAMPLES}
 `,
@@ -140,12 +177,22 @@ Usage:
 ${IMAGE_OPTIONS}
 ${EDIT_EXAMPLES}
 `,
-  providers: `imagegen providers - list registered and configured providers
+  providers: `imagegen providers - list providers and manage named endpoints
 
 Usage:
   imagegen providers
 
 Prints JSON with each provider and whether it is configured.
+
+${PROFILE_HELP}`,
+  models: `imagegen models - discover models for a named endpoint profile
+
+Usage:
+  imagegen models --provider <profile-name>
+
+Discovery is explicit and may require saved credentials. OpenRouter returns image
+models and reported capabilities; generic /models results have unknown image
+capabilities. This command does not generate images.
 `,
   skill: `imagegen skill - print or install the reusable agent skill
 

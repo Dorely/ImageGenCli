@@ -27,7 +27,8 @@ import {
   waitForOAuthCallback,
   CodexTokenManager,
 } from "@imagegencli/providers-codex";
-import { createGeminiEntry, geminiStore, storedKey, validateKey } from "@imagegencli/providers-google";
+import { createGeminiEntry, geminiStore, storedKey } from "@imagegencli/providers-google";
+import { ProfileRepository, createProfileEntry, ConfigurableImageProvider, profileStore, profileKey, validateApiKey, type EndpointProfile } from "@imagegencli/providers-configurable";
 import { readApiKey } from "./key-input.js";
 import { helpFor } from "./help.js";
 import { installSkill, SkillExistsError, skillText } from "./skill.js";
@@ -53,7 +54,7 @@ function parseArgs(argv: string[]): { flags: Map<string, string | boolean | stri
     }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "key-stdin", "no-open", "show-path", "target", "force"].includes(key)) {
+      if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "api", "base-url", "auth", "key-stdin", "no-open", "show-path", "target", "force"].includes(key)) {
         fail("usage", `Unknown option --${key}. Run imagegen help.`, EXIT_USAGE);
       }
       if (key === "key-stdin" || key === "no-open" || key === "show-path" || key === "force") {
@@ -153,10 +154,11 @@ function parseCount(flags: Map<string, string | boolean | string[]>): number {
   return count;
 }
 
-function registry(): ProviderRegistry {
+async function registry(): Promise<ProviderRegistry> {
   const registry = new ProviderRegistry();
   registry.register(createCodexEntry());
   registry.register(createGeminiEntry());
+  for (const profile of await new ProfileRepository().list()) registry.register(createProfileEntry(profile));
   return registry;
 }
 
@@ -217,39 +219,46 @@ async function saveImages(result: ProviderResult, paths: string[]): Promise<void
   }
 }
 
-async function runGeminiAuth(
+async function runApiKeyAuth(
+  providerName: string,
   action: string,
   flags: Map<string, string | boolean | string[]>,
 ): Promise<void> {
+  const profile = providerName === "gemini" ? undefined : await new ProfileRepository().get(providerName);
   try {
-    const store = await geminiStore();
+    if (profile?.auth === "none") {
+      process.stdout.write(`${JSON.stringify({ provider: providerName, ...(action === "status" ? { connected: true, auth: "none" } : { status: "not-required" }) })}\n`);
+      return;
+    }
+    const store = profile ? await profileStore() : await geminiStore();
     if (action === "login") {
-      const apiKey = validateKey(
-        await readApiKey(flags.get("key-stdin") === true),
+      const apiKey = validateApiKey(
+        await readApiKey(flags.get("key-stdin") === true, process.stdin, process.stderr, providerName),
       );
       if (store.describe().backend === "file")
         process.stderr.write(
-          "Warning: OS vault unavailable; credentials stored in a restricted file. Use auth gemini status --show-path to inspect.\n",
+          `Warning: OS vault unavailable; credentials stored in a restricted file. Use auth ${providerName} status --show-path to inspect.\n`,
         );
-      await store.save("gemini", { apiKey });
+      await store.save(providerName, { apiKey });
       process.stdout.write(
-        `${JSON.stringify({ provider: "gemini", status: "connected" })}\n`,
+        `${JSON.stringify({ provider: providerName, status: "connected" })}\n`,
       );
     } else if (action === "logout") {
-      await store.clear("gemini");
+      await store.clear(providerName);
       process.stdout.write(
-        `${JSON.stringify({ provider: "gemini", status: "disconnected" })}\n`,
+        `${JSON.stringify({ provider: providerName, status: "disconnected" })}\n`,
       );
     } else {
       let connected = false;
       try {
-        await storedKey(store);
+        if (profile) await profileKey(profile, store);
+        else await storedKey(store);
         connected = true;
       } catch (error) {
         if (!(error instanceof ProviderError)) throw error;
       }
       process.stdout.write(
-        `${JSON.stringify({ provider: "gemini", connected, ...(flags.get("show-path") ? { store: store.describe() } : {}) })}\n`,
+        `${JSON.stringify({ provider: providerName, connected, ...(flags.get("show-path") ? { store: store.describe() } : {}) })}\n`,
       );
     }
   } catch (error) {
@@ -257,7 +266,7 @@ async function runGeminiAuth(
       "auth",
       error instanceof ProviderError
         ? error.message
-        : "Could not access Gemini credentials. Check the credential store and retry login.",
+        : "Could not access API credentials. Check the credential store and retry login.",
       EXIT_AUTH,
     );
   }
@@ -265,7 +274,7 @@ async function runGeminiAuth(
 
 async function runAuthLogin(providerName: string, flags: Map<string, string | boolean | string[]>): Promise<void> {
   if (providerName !== PROVIDER_NAME) {
-    fail("usage", `Unknown auth provider "${providerName}". Available: ${registry().describe()}.`, EXIT_USAGE);
+    fail("usage", `Unknown auth provider "${providerName}". Available: ${(await registry()).describe()}.`, EXIT_USAGE);
   }
   const uri = redirectUri();
   const port = redirectPort(uri);
@@ -309,7 +318,8 @@ async function runAuthLogin(providerName: string, flags: Map<string, string | bo
 }
 
 async function runProviders(): Promise<void> {
-  const entries = registry().names().map((name) => registry().get(name));
+  const providersRegistry = await registry();
+  const entries = providersRegistry.names().map((name) => providersRegistry.get(name));
   const providers = [];
   for (const entry of entries) {
     const status = await entry.authStatus();
@@ -320,7 +330,7 @@ async function runProviders(): Promise<void> {
 
 async function runAuthStatus(providerName: string, flags: Map<string, string | boolean | string[]>): Promise<void> {
   if (providerName !== PROVIDER_NAME) {
-    fail("usage", `Unknown auth provider "${providerName}". Available: ${registry().describe()}.`, EXIT_USAGE);
+    fail("usage", `Unknown auth provider "${providerName}". Available: ${(await registry()).describe()}.`, EXIT_USAGE);
   }
   const store = await resolveTokenStore();
   const manager = new CodexTokenManager(store);
@@ -336,7 +346,7 @@ async function runAuthStatus(providerName: string, flags: Map<string, string | b
 
 async function runAuthLogout(providerName: string): Promise<void> {
   if (providerName !== PROVIDER_NAME) {
-    fail("usage", `Unknown auth provider "${providerName}". Available: ${registry().describe()}.`, EXIT_USAGE);
+    fail("usage", `Unknown auth provider "${providerName}". Available: ${(await registry()).describe()}.`, EXIT_USAGE);
   }
   const store = await resolveTokenStore();
   await store.clear(PROVIDER_NAME);
@@ -365,7 +375,7 @@ async function runGenerate(flags: Map<string, string | boolean | string[]>): Pro
 
 async function resolveProviders(requested: string[] | undefined): Promise<ProviderEntry[]> {
   try {
-    return await registry().resolve(requested);
+    return await (await registry()).resolve(requested);
   } catch (error) {
     fail("usage", error instanceof Error ? error.message : String(error), EXIT_USAGE);
   }
@@ -422,8 +432,8 @@ async function main(): Promise<void> {
     return;
   }
   const [command, sub, subSub] = positionals;
-  if (flags.has("key-stdin") && !(command === "auth" && sub === "gemini" && subSub === "login")) {
-    fail("usage", "--key-stdin is only supported by auth gemini login.", EXIT_USAGE);
+  if (flags.has("key-stdin") && !(command === "auth" && sub !== "codex" && subSub === "login")) {
+    fail("usage", "--key-stdin is only supported by API-key auth login.", EXIT_USAGE);
   }
   try {
     if (command === "help") {
@@ -448,6 +458,29 @@ async function main(): Promise<void> {
       }
       return;
     }
+    if (command === "providers" && sub) {
+      if (!subSub || positionals.length !== 3) fail("usage", "Usage: imagegen providers add|show|update|remove <name> [options].", EXIT_USAGE);
+      const repository = new ProfileRepository();
+      if (sub === "show") process.stdout.write(`${JSON.stringify({ provider: await repository.get(subSub) })}\n`);
+      else if (sub === "remove") { await repository.remove(subSub); process.stdout.write(`${JSON.stringify({ provider: subSub, status: "removed" })}\n`); }
+      else if (sub === "add" || sub === "update") {
+        const patch: Record<string, string> = {};
+        for (const [flag, key] of [["api", "api"], ["base-url", "baseUrl"], ["auth", "auth"], ["model", "model"]]) {
+          const value = flagValue(flags, flag); if (value !== undefined) patch[key] = value;
+        }
+        const profile = sub === "add" ? await repository.add({ name: subSub, ...patch }) : await repository.update(subSub, patch as Partial<EndpointProfile>);
+        process.stdout.write(`${JSON.stringify({ provider: profile })}\n`);
+      } else fail("usage", "Unknown providers action. Use add, show, update, or remove.", EXIT_USAGE);
+      return;
+    }
+    if (command === "models" && !sub) {
+      const selected = requestedProviders(flags);
+      if (!selected || selected.length !== 1) fail("usage", "Model discovery requires exactly one --provider <profile-name>.", EXIT_USAGE);
+      const profile = await new ProfileRepository().get(selected[0]);
+      const provider = new ConfigurableImageProvider(profile, async () => profileKey(profile, await profileStore()));
+      process.stdout.write(`${JSON.stringify({ provider: profile.name, models: await provider.models() })}\n`);
+      return;
+    }
     if (command === "providers" && !sub) {
       await runProviders();
       return;
@@ -455,8 +488,8 @@ async function main(): Promise<void> {
     if (command === "auth" && sub && !subSub) {
       fail("usage", `Missing auth action. Usage: imagegen auth ${sub} login|status|logout.`, EXIT_USAGE);
     }
-    if (command === "auth" && sub === "gemini" && ["login", "status", "logout"].includes(subSub)) {
-      await runGeminiAuth(subSub, flags);
+    if (command === "auth" && sub && sub !== "codex" && ["login", "status", "logout"].includes(subSub)) {
+      await runApiKeyAuth(sub, subSub, flags);
       return;
     }
     if (command === "auth" && sub) {
@@ -483,7 +516,10 @@ async function main(): Promise<void> {
     }
     fail("usage", `Unknown command: ${positionals.join(" ")}. Run \`imagegen help\`.`, EXIT_USAGE);
   } catch (error) {
-    if (error instanceof ProviderError) fail("provider", `${error.kind}: ${error.message}`, EXIT_PROVIDER);
+    if (error instanceof ProviderError) {
+      const exit = error.kind === "auth" ? EXIT_AUTH : error.kind === "usage" || error.kind === "configuration" ? EXIT_USAGE : error.kind === "io" ? EXIT_IO : EXIT_PROVIDER;
+      fail(error.kind, error.message, exit);
+    }
     fail("provider", error instanceof Error ? error.message : String(error), EXIT_PROVIDER);
   }
 }

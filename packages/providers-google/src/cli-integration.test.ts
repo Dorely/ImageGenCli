@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
+vi.mock("@imagegencli/providers-configurable", async (original) => ({ ...await original<Record<string, unknown>>(), ProfileRepository: class { async list() { return []; } } }));
+
 const state = vi.hoisted(() => ({
   key: undefined as string | undefined,
   payloads: [] as unknown[],

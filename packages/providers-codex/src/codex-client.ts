@@ -93,7 +93,7 @@ function buildPayload(args: {
 
 export class CodexImageProvider {
   readonly name = PROVIDER_NAME;
-  readonly sizePolicy: ImageSizePolicy = { resolveSize: (size) => resolveSize(size) };
+  readonly sizePolicy = { resolveSize: (size: string | undefined) => resolveSize(size) } satisfies ImageSizePolicy;
   private readonly orchestrationModel: string;
   private readonly imageModel: string;
   private readonly timeoutSeconds: number;

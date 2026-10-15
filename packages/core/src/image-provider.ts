@@ -1,7 +1,11 @@
 import type { EditRequest, GenerateRequest, ProviderResult } from "./types.js";
 
+export type ImageSizeResolution =
+  | { width: number; height: number; size: string; pixels: number }
+  | { size: string; width?: never; height?: never; pixels?: never };
+
 export interface ImageSizePolicy {
-  resolveSize(size: string | undefined): { width: number; height: number; size: string; pixels: number };
+  resolveSize(size: string | undefined): ImageSizeResolution;
 }
 
 export interface IImageProvider {

@@ -47,8 +47,8 @@
 | `apps/cli/package.json` | CLI workspace package metadata, binary entry, dependencies, and scripts. |
 | `apps/cli/tsconfig.json` | TypeScript project settings for the CLI app. |
 | `apps/cli/scripts/bundle.mjs` | esbuild bundler producing the self-contained publishable CLI. |
-| `apps/cli/src/index.ts` | CLI entry point: arg parsing, auth/generate/edit/help wiring, JSON reporting. |
-| `apps/cli/src/help.ts` | Shared image options, supported Codex/Gemini models, and examples for general and command help. |
+| `apps/cli/src/index.ts` | CLI entry point: parsing, auth, profile management, discovery, image commands, and JSON reporting. |
+| `apps/cli/src/help.ts` | Image options, profile management/discovery commands, supported provider guidance, and help examples. |
 | `apps/cli/src/skill.ts` | Loads and installs the packaged agent skill for the `imagegen skill` command. |
 | `apps/cli/skill/SKILL.md` | Packaged agent instructions for CLI use, model selection, native alpha transparency, and image verification. |
 
@@ -60,7 +60,7 @@
 | `packages/core/tsconfig.json` | TypeScript project settings for the core package. |
 | `packages/core/src/index.ts` | Core package barrel exports for contracts and shared helpers. |
 | `packages/core/src/types.ts` | Provider-neutral image request/result/error types and limits. |
-| `packages/core/src/image-provider.ts` | `IImageProvider` contract with per-provider size policy. |
+| `packages/core/src/image-provider.ts` | `IImageProvider` contract and size policies with model-deferred or concrete raster resolution. |
 | `packages/core/src/provider-registry.ts` | Provider registry: routing, configured detection, multi-select. |
 | `packages/core/src/provider-registry.test.ts` | Regression tests for provider resolution. |
 | `packages/core/src/token-store.ts` | `TokenSet`/`ITokenStore` contract for credential persistence. |
@@ -97,7 +97,7 @@
 
 | File | Description |
 |------|-------------|
-| `apps/cli/src/key-input.ts` | Hidden terminal key input and explicit bounded stdin input. |
+| `apps/cli/src/key-input.ts` | Provider-labelled hidden terminal key input and explicit bounded stdin input. |
 | `docs/gemini-research.md` | Dated official-source research, API mappings, limits, and prompting decisions. |
 | `packages/credentials/package.json` | Shared credential persistence workspace metadata and tests. |
 | `packages/credentials/tsconfig.json` | Shared persistence TypeScript build settings. |
@@ -111,3 +111,21 @@
 | `packages/providers-google/src/gemini-client.ts` | Stateless Interactions transport, response validation, and format conversion. |
 | `packages/providers-google/src/gemini-client.test.ts` | Mock transport, error, timeout, format, and native-size tests. |
 | `packages/providers-google/src/cli-integration.test.ts` | Isolated CLI auth, routing, multi-provider output, and hidden-input tests. |
+
+## Configurable API Providers
+
+| File | Description |
+|------|-------------|
+| `docs/configurable-api-research.md` | Official-source protocol research, compatibility boundaries, and validation approach. |
+| `packages/providers-configurable/package.json` | Configurable-provider workspace dependencies, exports, and scripts. |
+| `packages/providers-configurable/tsconfig.json` | Provider TypeScript settings and core/credential references. |
+| `packages/providers-configurable/src/index.ts` | Profile management and configurable-provider exports. |
+| `packages/providers-configurable/src/profiles.ts` | Validated versioned endpoint profiles, isolated keys, and profile lifecycle persistence. |
+| `packages/providers-configurable/src/profiles.test.ts` | Profile persistence, validation, key cleanup, and account-isolation tests. |
+| `packages/providers-configurable/src/image-size.ts` | Protocol-specific pixel, aspect, preset, and automatic size mapping. |
+| `packages/providers-configurable/src/http.ts` | Bounded HTTP operations, secret-free errors, and credential-free image downloads. |
+| `packages/providers-configurable/src/openrouter.ts` | Dedicated OpenRouter image request encoding with inline references. |
+| `packages/providers-configurable/src/openai-images.ts` | OpenAI Images JSON generation and multipart edit request encoding. |
+| `packages/providers-configurable/src/provider.ts` | Provider registration, model discovery, image validation, and output conversion. |
+| `packages/providers-configurable/src/provider.test.ts` | Mocked protocol, size, count, discovery, error, download, and timeout coverage. |
+| `packages/providers-configurable/src/cli-integration.test.ts` | Isolated profile commands, auth, discovery, generation/edit output, and exit-code tests. |
