@@ -44,6 +44,8 @@ export interface ProviderErrorDetails {
   statusCode?: number;
   requestId?: string;
   responseId?: string;
+  upstreamProvider?: string;
+  retryAfterSeconds?: number;
 }
 
 export class ProviderError extends Error {
@@ -51,6 +53,8 @@ export class ProviderError extends Error {
   readonly statusCode?: number;
   readonly requestId?: string;
   readonly responseId?: string;
+  readonly upstreamProvider?: string;
+  readonly retryAfterSeconds?: number;
 
   constructor(details: ProviderErrorDetails) {
     super(details.message);
@@ -59,6 +63,8 @@ export class ProviderError extends Error {
     this.statusCode = details.statusCode;
     this.requestId = details.requestId;
     this.responseId = details.responseId;
+    this.upstreamProvider = details.upstreamProvider;
+    this.retryAfterSeconds = details.retryAfterSeconds;
   }
 }
 

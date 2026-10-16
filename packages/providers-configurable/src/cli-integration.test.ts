@@ -234,4 +234,48 @@ describe("endpoint CLI", () => {
     expect(state.exits[0]).toBe(3);
     expect(stderr).not.toContain("fixture-secret");
   });
+  it("includes sanitized upstream diagnostics in CLI JSON errors", async () => {
+    await run([
+      "providers",
+      "add",
+      "router",
+      "--api",
+      "openrouter",
+      "--model",
+      "test",
+    ]);
+    await run(["auth", "router", "login"]);
+    vi.stubGlobal("fetch", async () =>
+      Response.json(
+        {
+          error: {
+            message: "Quota exhausted fixture-secret",
+            metadata: { provider_name: "Google AI Studio" },
+          },
+        },
+        { status: 429, headers: { "retry-after": "10" } },
+      ),
+    );
+    await expect(
+      run([
+        "generate",
+        "--provider",
+        "router",
+        "--prompt",
+        "brief",
+        "--out",
+        join(state.root, "out.png"),
+      ]),
+    ).rejects.toThrow();
+    const failure = JSON.parse(stderr.trim().split("\n")[0]);
+    expect(failure.error).toMatchObject({
+      kind: "provider",
+      statusCode: 429,
+      upstreamProvider: "Google AI Studio",
+      retryAfterSeconds: 10,
+    });
+    expect(failure.error.message).toContain("upstream's quota");
+    expect(stderr).not.toContain("fixture-secret");
+    expect(state.exits[0]).toBe(4);
+  });
 });

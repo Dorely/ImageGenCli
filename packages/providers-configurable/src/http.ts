@@ -39,8 +39,33 @@ export class EndpointHttp {
         signal: controller.signal,
       });
       if (!response.ok) {
-        await response.body?.cancel().catch(() => {});
         const status = response.status;
+        // Inspect only structured diagnostic fields; never echo raw provider bodies.
+        const failure = record(await response.json().catch(() => null));
+        const detail = record(failure.error);
+        const upstream = record(detail.metadata).provider_name;
+        const token = new Headers(init.headers)
+          .get("authorization")
+          ?.replace(/^Bearer\s+/i, "");
+        const upstreamProvider =
+          typeof upstream === "string" &&
+          /^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,63}$/.test(upstream) &&
+          !(token && upstream.includes(token)) &&
+          !/(?:sk-|AIza)/.test(upstream)
+            ? upstream
+            : undefined;
+        const retryHeader = response.headers.get("retry-after");
+        const retryAfterSeconds =
+          retryHeader &&
+          /^\d+$/.test(retryHeader) &&
+          Number.isSafeInteger(Number(retryHeader))
+            ? Number(retryHeader)
+            : undefined;
+        const upstreamQuota =
+          status === 429 &&
+          upstreamProvider &&
+          typeof detail.message === "string" &&
+          /quota|resource.exhausted/i.test(detail.message);
         throw new ProviderError({
           kind: download
             ? "download"
@@ -52,13 +77,19 @@ export class EndpointHttp {
                   ? "server"
                   : "usage",
           statusCode: status,
+          upstreamProvider,
+          retryAfterSeconds,
           message: download
             ? `Image download failed (HTTP ${status}).`
             : status === 401 || status === 403
               ? "Endpoint authentication failed. Check the saved key and model access."
-              : status === 429
-                ? "Endpoint quota or rate limit reached. Check your account before retrying."
-                : `Endpoint returned HTTP ${status}. Check the API format, model ID, and supported image options.`,
+              : upstreamQuota
+                ? `Upstream ${upstreamProvider} quota is exhausted (HTTP 429). Gateway credits may still be available. Select a different model or upstream, or resolve that upstream's quota.`
+                : status === 429 && upstreamProvider
+                  ? `Upstream ${upstreamProvider} rate limit reached (HTTP 429). Wait for its limit to reset or select another model/upstream.`
+                  : status === 429
+                    ? "Endpoint quota or rate limit reached (HTTP 429). Check gateway and upstream limits before retrying."
+                    : `Endpoint returned HTTP ${status}. Check the API format, model ID, and supported image options.`,
         });
       }
       return response;

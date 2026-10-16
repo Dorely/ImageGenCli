@@ -249,6 +249,93 @@ describe("configurable image transport", () => {
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     },
   );
+  it("identifies upstream quota exhaustion without blaming gateway credit", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json(
+        {
+          error: {
+            code: 429,
+            message: "You exceeded your current quota. fixture-secret",
+            metadata: {
+              provider_name: "Google AI Studio",
+              raw: "fixture-secret request body",
+            },
+          },
+        },
+        { status: 429, headers: { "retry-after": "30" } },
+      ),
+    );
+    const p = new ConfigurableImageProvider(
+      router,
+      async () => "fixture-secret",
+      { fetchImpl },
+    );
+    const failure = await p.generate(request).catch((e) => e);
+    expect(failure).toMatchObject({
+      kind: "rate_limit",
+      statusCode: 429,
+      upstreamProvider: "Google AI Studio",
+      retryAfterSeconds: 30,
+    });
+    expect(failure.message).toContain(
+      "Upstream Google AI Studio quota is exhausted",
+    );
+    expect(failure.message).toContain("Gateway credits may still be available");
+    expect(JSON.stringify(failure)).not.toContain("fixture-secret");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it("does not reflect a secret or raw metadata as the upstream provider", async () => {
+    const p = new ConfigurableImageProvider(
+      router,
+      async () => "fixture-secret",
+      {
+        fetchImpl: async () =>
+          Response.json(
+            {
+              error: {
+                message: "fixture-secret",
+                metadata: {
+                  provider_name: "fixture-secret",
+                  raw: "fixture-secret",
+                },
+              },
+            },
+            { status: 429, headers: { "retry-after": "fixture-secret" } },
+          ),
+      },
+    );
+    const failure = await p.generate(request).catch((e) => e);
+    expect(failure).toMatchObject({
+      kind: "rate_limit",
+      upstreamProvider: undefined,
+      retryAfterSeconds: undefined,
+    });
+    expect(JSON.stringify(failure)).not.toContain("fixture-secret");
+    expect(failure.message).not.toContain("fixture-secret");
+  });
+  it("times out while reading an error body and leaves no pending timer", async () => {
+    vi.useFakeTimers();
+    const p = new ConfigurableImageProvider(router, async () => "key", {
+      timeoutSeconds: 1,
+      fetchImpl: async (_url, init) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () =>
+                controller.error(new Error("aborted")),
+              );
+            },
+          }),
+          { status: 429 },
+        ),
+    });
+    const assertion = expect(p.generate(request)).rejects.toMatchObject({
+      kind: "timeout",
+    });
+    await vi.advanceTimersByTimeAsync(1001);
+    await assertion;
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it.each([
     {},
     { data: [] },

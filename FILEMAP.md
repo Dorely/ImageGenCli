@@ -59,7 +59,7 @@
 | `packages/core/package.json` | Workspace package metadata for provider-neutral contracts and shared types. |
 | `packages/core/tsconfig.json` | TypeScript project settings for the core package. |
 | `packages/core/src/index.ts` | Core package barrel exports for contracts and shared helpers. |
-| `packages/core/src/types.ts` | Provider-neutral image request/result/error types and limits. |
+| `packages/core/src/types.ts` | Provider-neutral request/result/error types, upstream retry metadata, and limits. |
 | `packages/core/src/image-provider.ts` | `IImageProvider` contract and size policies with model-deferred or concrete raster resolution. |
 | `packages/core/src/provider-registry.ts` | Provider registry: routing, configured detection, multi-select. |
 | `packages/core/src/provider-registry.test.ts` | Regression tests for provider resolution. |
@@ -123,7 +123,7 @@
 | `packages/providers-configurable/src/profiles.ts` | Validated versioned endpoint profiles, isolated keys, and profile lifecycle persistence. |
 | `packages/providers-configurable/src/profiles.test.ts` | Profile persistence, validation, key cleanup, and account-isolation tests. |
 | `packages/providers-configurable/src/image-size.ts` | Protocol-specific pixel, aspect, preset, and automatic size mapping. |
-| `packages/providers-configurable/src/http.ts` | Bounded HTTP operations, secret-free errors, and credential-free image downloads. |
+| `packages/providers-configurable/src/http.ts` | Bounded HTTP operations, sanitized upstream quota/retry diagnostics, and credential-free image downloads. |
 | `packages/providers-configurable/src/openrouter.ts` | Dedicated OpenRouter image request encoding with inline references. |
 | `packages/providers-configurable/src/openai-images.ts` | OpenAI Images JSON generation and multipart edit request encoding. |
 | `packages/providers-configurable/src/provider.ts` | Provider registration, model discovery, image validation, and output conversion. |

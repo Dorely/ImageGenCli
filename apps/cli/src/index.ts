@@ -38,8 +38,12 @@ const EXIT_AUTH = 3;
 const EXIT_PROVIDER = 4;
 const EXIT_IO = 5;
 
-function fail(kind: string, message: string, exitCode: number): never {
-  process.stderr.write(`${JSON.stringify({ error: { kind, message } })}\n`);
+function errorDetails(error: ProviderError): Pick<ProviderError, "statusCode" | "upstreamProvider" | "retryAfterSeconds"> {
+  return { statusCode: error.statusCode, upstreamProvider: error.upstreamProvider, retryAfterSeconds: error.retryAfterSeconds };
+}
+
+function fail(kind: string, message: string, exitCode: number, details: Pick<ProviderError, "statusCode" | "upstreamProvider" | "retryAfterSeconds"> = {}): never {
+  process.stderr.write(`${JSON.stringify({ error: { kind, message, ...details } })}\n`);
   process.exit(exitCode);
 }
 
@@ -413,9 +417,9 @@ async function runImageRequest(request: GenerateRequest, edit: EditRequest | und
     } catch (error) {
       if (error instanceof ReauthRequiredError) fail("auth", `${entry.provider.name}: ${error.message}`, EXIT_AUTH);
       if (error instanceof ProviderError) {
-        if (error.kind === "auth") fail("auth", `${entry.provider.name}: ${error.message}`, EXIT_AUTH);
-        if (error.kind === "configuration" || error.kind === "usage") fail(error.kind, `${entry.provider.name}: ${error.message}`, EXIT_USAGE);
-        fail("provider", `${entry.provider.name}: ${error.kind}: ${error.message}`, EXIT_PROVIDER);
+        if (error.kind === "auth") fail("auth", `${entry.provider.name}: ${error.message}`, EXIT_AUTH, errorDetails(error));
+        if (error.kind === "configuration" || error.kind === "usage") fail(error.kind, `${entry.provider.name}: ${error.message}`, EXIT_USAGE, errorDetails(error));
+        fail("provider", `${entry.provider.name}: ${error.kind}: ${error.message}`, EXIT_PROVIDER, errorDetails(error));
       }
       throw error;
     }
@@ -518,7 +522,7 @@ async function main(): Promise<void> {
   } catch (error) {
     if (error instanceof ProviderError) {
       const exit = error.kind === "auth" ? EXIT_AUTH : error.kind === "usage" || error.kind === "configuration" ? EXIT_USAGE : error.kind === "io" ? EXIT_IO : EXIT_PROVIDER;
-      fail(error.kind, error.message, exit);
+      fail(error.kind, error.message, exit, errorDetails(error));
     }
     fail("provider", error instanceof Error ? error.message : String(error), EXIT_PROVIDER);
   }
