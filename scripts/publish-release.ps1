@@ -93,10 +93,10 @@ try {
     }
   }
 
-  Write-Output "Tag $Tag is pushed. Publish the CLI to npm from this machine with: npm publish --workspace @dorely13/ai-imagegen-cli"
-  Write-Output "Then attach the tarball to the GitHub release:"
   $tarballPath = Join-Path $repositoryRoot "release\dorely13-ai-imagegen-cli-$version.tgz"
   $checksumPath = "$tarballPath.sha256"
+  Write-Output "Tag $Tag is pushed. Publish the verified tarball to npm with: npm publish `"$tarballPath`" --access public"
+  Write-Output "Attaching the tarball and checksum to the GitHub release:"
   & gh.exe release create $Tag $tarballPath $checksumPath --verify-tag --generate-notes --title "ImageGenCli $Tag"
   if ($LASTEXITCODE -ne 0) {
     throw "Unable to create GitHub release $Tag. The tag remains available for a retry."

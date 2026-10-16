@@ -7,6 +7,7 @@ ImageGenCli is a provider-agnostic command-line tool for programmatic image gene
 ## Current Status
 
 - Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex Responses API (default `gpt-image-2.5-flare`, with Sunburst and `gpt-image-2` selectable).
+- Named API profiles implemented: OpenRouter and OpenAI Images-compatible endpoints, stored-key auth, explicit model discovery, and upstream quota diagnostics.
 - Gemini provider implemented: stored API key, stateless Interactions API generation, references, independent edits, native-size normalization, and PNG/JPEG/WebP delivery.
 
 ## Install

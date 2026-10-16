@@ -34,7 +34,7 @@ npm run release
 The release script verifies that:
 
 - the Git working tree is clean;
-- the CLI, core, and providers-codex package versions match;
+- all workspace package versions match (CLI, core, credentials, and every provider);
 - core and provider regression tests pass;
 - TypeScript builds across the project references;
 - the expected `dorely13-ai-imagegen-cli-VERSION.tgz` is produced by `npm pack`;
@@ -44,7 +44,7 @@ Use `npm pack --workspace @dorely13/ai-imagegen-cli` directly when you only need
 
 ## Version and publish workflow
 
-1. Bump the CLI, core, and providers-codex versions together and review the lockfile update.
+1. Bump all workspace versions together, update their internal dependency versions, and review the lockfile update. The private root package has its own version.
 2. Commit the version change and confirm the working tree is clean.
 3. Run `npm run publish` from Windows.
 
@@ -53,11 +53,13 @@ The publish script reruns all local release checks, creates an annotated tag mat
 After the GitHub Release exists, publish the same tarball to npm from this machine:
 
 ```powershell
-npm publish --workspace @dorely13/ai-imagegen-cli
+npm publish ./release/dorely13-ai-imagegen-cli-VERSION.tgz --access public
 ```
+
+Replace `VERSION` with the release version. Publish the verified tarball rather than rebuilding the workspace so npm receives the same bytes attached to GitHub. Run `npm login` first if `npm whoami` reports 401.
 
 The GitHub Release stays the source of truth for what shipped; npm is the install channel (`npm install -g @dorely13/ai-imagegen-cli`). Publishing requires an authenticated GitHub CLI session with permission to push the repository and create releases, plus an authenticated npm session for the publishing account.
 
 ## keytar note
 
-The CLI depends on `keytar` for OS-vault token storage. It ships a prebuilt Windows binary, so `npm ci` works cleanly here. Linux installs need `libsecret` present for the vault path; otherwise the encrypted-file fallback applies. If a future keytar release drops prebuilds, pin the last good version or revisit the vault dependency before releasing.
+The CLI depends on `keytar` for OS-vault token storage. It ships a prebuilt Windows binary, so `npm ci` works cleanly here. Linux installs need `libsecret` present for the vault path; otherwise the restricted-file fallback applies. If a future keytar release drops prebuilds, pin the last good version or revisit the vault dependency before releasing.
