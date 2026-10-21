@@ -76,17 +76,20 @@
 | `packages/providers-codex/package.json` | Workspace metadata for the Codex OAuth and Responses API provider. |
 | `packages/providers-codex/tsconfig.json` | TypeScript project settings for the Codex provider package. |
 | `packages/providers-codex/src/index.ts` | Codex provider barrel exports. |
-| `packages/providers-codex/src/codex-constants.ts` | Codex endpoints, OAuth client, defaults, and timeouts. |
+| `packages/providers-codex/src/codex-constants.ts` | Codex endpoints, OAuth client, defaults, timeouts, and refresh-lock timing. |
 | `packages/providers-codex/src/pkce.ts` | PKCE pair generation and authorize-URL builder. |
 | `packages/providers-codex/src/pkce.test.ts` | Regression tests for PKCE helpers. |
 | `packages/providers-codex/src/loopback-server.ts` | Temporary localhost callback server for OAuth login. |
-| `packages/providers-codex/src/codex-auth.ts` | PKCE flow state, token exchange, refresh, and expiry helpers. |
-| `packages/providers-codex/src/codex-auth.test.ts` | Regression tests for token-expiry helpers. |
-| `packages/providers-codex/src/codex-token-manager.ts` | Token lifecycle: exchange, cached access, serialized refresh. |
+| `packages/providers-codex/src/codex-auth.ts` | PKCE flow state, token exchange, refresh outcomes with OpenAI error codes, and early-refresh check. |
+| `packages/providers-codex/src/codex-auth.test.ts` | Regression tests for refresh timing and token-endpoint error classification. |
+| `packages/providers-codex/src/codex-token-manager.ts` | Token lifecycle: exchange, early refresh, cross-process locked refresh with reload, 401 recovery. |
+| `packages/providers-codex/src/codex-token-manager.test.ts` | Concurrent-process refresh, adoption, dead-credential, and status tests. |
+| `packages/providers-codex/src/refresh-lock.ts` | Exclusive lock file serializing single-use refresh-token redemption across processes. |
+| `packages/providers-codex/src/refresh-lock.test.ts` | Lock exclusivity, release, stale reclaim, and timeout tests. |
 | `packages/providers-codex/src/token-store.ts` | Codex validation adapter over shared vault/file credential persistence. |
 | `packages/providers-codex/src/account-id.ts` | ChatGPT account-id extraction from the access JWT. |
 | `packages/providers-codex/src/account-id.test.ts` | Regression tests for account-id extraction. |
-| `packages/providers-codex/src/codex-client.ts` | Responses API image provider (generate/edit, streaming). |
+| `packages/providers-codex/src/codex-client.ts` | Responses API image provider (generate/edit, streaming, one refreshed retry on 401). |
 | `packages/providers-codex/src/codex-client.test.ts` | Mock transport tests for model selection, quality, and edit inputs. |
 | `packages/providers-codex/src/cli-integration.test.ts` | CLI help, validation, request forwarding, and image file saving with mocked provider transport. |
 | `packages/providers-codex/src/codex-entry.ts` | Registry entry wiring the Codex provider and auth status. |

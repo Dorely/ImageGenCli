@@ -194,28 +194,14 @@ export class CodexImageProvider {
   }
 
   private async sendOnce(payload: Record<string, unknown>, format: OutputFormat, prompt: string, size: ImageSize): Promise<ProviderResult["images"][number]> {
-    const accessToken = await this.tokens.getValidAccessToken();
-    const accountId = extractAccountId(accessToken);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutSeconds * 1000);
-    let response: Response;
-    try {
-      response = await this.fetchImpl(RESPONSES_ENDPOINT, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          "chatgpt-account-id": accountId,
-          "OpenAI-Beta": "responses=experimental",
-          originator: "pi",
-          "user-agent": USER_AGENT,
-          accept: "text/event-stream",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timer);
+    const body = JSON.stringify(payload);
+    let accessToken = await this.tokens.getValidAccessToken();
+    let response = await this.post(accessToken, body);
+    if (response.status === 401) {
+      // Retry once with refreshed credentials; refresh rejection surfaces as a reauth error.
+      await response.body?.cancel();
+      accessToken = await this.tokens.recoverFromUnauthorized(accessToken);
+      response = await this.post(accessToken, body);
     }
 
     const requestId =
@@ -225,9 +211,9 @@ export class CodexImageProvider {
       undefined;
 
     if (!response.ok || !response.body) {
-      const body = await response.text().catch(() => "");
-      const kind = classifyImageError(body);
-      const detail = readErrorMessage(body);
+      const errorText = await response.text().catch(() => "");
+      const kind = classifyImageError(errorText);
+      const detail = readErrorMessage(errorText);
       throw new ProviderError({
         kind,
         message: detail ? `Codex image request returned ${response.status} (${kind}): ${detail}` : `Codex image request returned ${response.status} (${kind}).`,
@@ -252,6 +238,28 @@ export class CodexImageProvider {
       responseId: parsed.responseId,
       callId: parsed.callId,
     };
+  }
+  private async post(accessToken: string, body: string): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutSeconds * 1000);
+    try {
+      return await this.fetchImpl(RESPONSES_ENDPOINT, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          "chatgpt-account-id": extractAccountId(accessToken),
+          "OpenAI-Beta": "responses=experimental",
+          originator: "pi",
+          "user-agent": USER_AGENT,
+          accept: "text/event-stream",
+          "content-type": "application/json",
+        },
+        body,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 

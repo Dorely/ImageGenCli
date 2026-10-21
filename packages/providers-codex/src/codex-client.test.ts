@@ -89,3 +89,35 @@ describe("image options and quality", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
+
+describe("unauthorized recovery", () => {
+  function jwt(accountId: string) {
+    return `test.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: accountId } })).toString("base64url")}.test`;
+  }
+
+  function setupRecovery(statuses: number[]) {
+    const tokens = new CodexTokenManager({ load: async () => ({ accessToken: jwt("before"), expiresAt: Date.now() + 3_600_000 }), save: vi.fn(), clear: vi.fn(), describe: () => ({ backend: "file", location: "unused" }) });
+    const recover = vi.spyOn(tokens, "recoverFromUnauthorized").mockResolvedValue(jwt("after"));
+    const success = () => new Response(`data: ${JSON.stringify({ type: "response.output_item.done", item: { type: "image_generation_call", result: Buffer.from("pixels").toString("base64") } })}\n\ndata: [DONE]\n`);
+    const fetchImpl = vi.fn<typeof fetch>(async () => {
+      const status = statuses.shift() ?? 200;
+      return status === 200 ? success() : new Response(JSON.stringify({ detail: "Unauthorized" }), { status });
+    });
+    const accounts = () => fetchImpl.mock.calls.map((call) => (call[1]?.headers as Record<string, string>)["chatgpt-account-id"]);
+    return { provider: new CodexImageProvider(tokens, { fetchImpl }), recover, fetchImpl, accounts };
+  }
+
+  it("retries once with refreshed credentials after a 401", async () => {
+    const { provider, recover, accounts } = setupRecovery([401]);
+    await expect(provider.generate(request)).resolves.toMatchObject({ images: [{ mimeType: "image/png" }] });
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(accounts()).toEqual(["before", "after"]);
+  });
+
+  it("surfaces a second 401 without further refreshes", async () => {
+    const { provider, recover, fetchImpl } = setupRecovery([401, 401]);
+    await expect(provider.generate(request)).rejects.toMatchObject({ statusCode: 401 });
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});
