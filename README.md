@@ -102,7 +102,7 @@ imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a produ
 
 ## Configuration
 
-- `IMAGEGEN_CODEX_MODEL` — optional override for the Codex orchestration model (default `gpt-5.6-luna`). This model executes the image toolcall and is part of the provider's request shape; it never rewrites the caller's prompt.
+- `IMAGEGEN_CODEX_MODEL` — optional override for the Codex orchestration model (default `gpt-6-luna`). This model executes the image toolcall and is part of the provider's request shape; it never rewrites the caller's prompt.
 - `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2.5-flare`); `--model` takes precedence.
 - `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
 
