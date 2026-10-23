@@ -3,6 +3,10 @@ export interface StreamImage {
   revisedPrompt?: string;
   responseId?: string;
   callId?: string;
+  responseModel?: string;
+  // Orchestration-model token usage and image-tool usage from response.completed.
+  usage?: unknown;
+  imageUsage?: unknown;
 }
 
 export function classifyImageError(message: string): string {
@@ -58,13 +62,8 @@ export function parseImageStreamEvents(events: string[]): StreamImage & { eventC
   let eventCount = 0;
   let lastEventType: string | undefined;
   let responseId: string | undefined;
-
-  const finish = (image: { data: Uint8Array; revisedPrompt?: string; callId?: string }): StreamImage & { eventCount: number; lastEventType?: string } => ({
-    ...image,
-    responseId,
-    eventCount,
-    lastEventType,
-  });
+  let image: ReturnType<typeof tryReadImageItem> = null;
+  let completed: Record<string, unknown> | undefined;
 
   for (const raw of events) {
     const line = raw.trim();
@@ -89,30 +88,39 @@ export function parseImageStreamEvents(events: string[]): StreamImage & { eventC
       throw new Error(`${classifyImageError(readEventError(event) ?? "")}: ${readEventError(event) ?? "Codex image generation failed."}`);
     }
     if (type === "response.output_item.done" && typeof event === "object" && event !== null) {
-      const item = (event as Record<string, unknown>)["item"];
-      const image = tryReadImageItem(item);
-      if (image) return finish(image);
+      image ??= tryReadImageItem((event as Record<string, unknown>)["item"]);
     }
     if (type === "response.completed" && typeof event === "object" && event !== null) {
       const response = (event as Record<string, unknown>)["response"];
-      const id = readString(response, "id");
-      if (id) responseId = id;
       if (typeof response === "object" && response !== null) {
-        const output = (response as Record<string, unknown>)["output"];
+        // Keep reading past the image: usage only arrives on response.completed.
+        completed = response as Record<string, unknown>;
+        const id = readString(completed, "id");
+        if (id) responseId = id;
+        const output = completed["output"];
         if (Array.isArray(output)) {
-          for (const item of output) {
-            const image = tryReadImageItem(item);
-            if (image) return finish(image);
-          }
+          for (const item of output) image ??= tryReadImageItem(item);
         }
       }
     }
   }
 
-  throw new Error(
-    `stream_completed_without_image: Codex image generation completed without returning an image. ` +
-    `responseId=${responseId ?? "unknown"}, events=${eventCount}, lastEvent=${lastEventType ?? "none"}.`,
-  );
+  if (!image) {
+    throw new Error(
+      `stream_completed_without_image: Codex image generation completed without returning an image. ` +
+      `responseId=${responseId ?? "unknown"}, events=${eventCount}, lastEvent=${lastEventType ?? "none"}.`,
+    );
+  }
+  const toolUsage = completed?.["tool_usage"];
+  return {
+    ...image,
+    responseId,
+    responseModel: readString(completed, "model"),
+    usage: completed?.["usage"],
+    imageUsage: typeof toolUsage === "object" && toolUsage !== null ? (toolUsage as Record<string, unknown>)["image_gen"] : undefined,
+    eventCount,
+    lastEventType,
+  };
 }
 
 export function splitSseLines(chunk: string): string[] {

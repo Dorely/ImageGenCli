@@ -32,6 +32,7 @@ import { ProfileRepository, createProfileEntry, ConfigurableImageProvider, profi
 import { readApiKey } from "./key-input.js";
 import { helpFor } from "./help.js";
 import { installSkill, SkillExistsError, skillText } from "./skill.js";
+import { appendUsageLog, USAGE_LOG_ENV, usageLogEntry } from "./usage-log.js";
 
 const EXIT_USAGE = 2;
 const EXIT_AUTH = 3;
@@ -205,6 +206,7 @@ function printResult(providerName: string, result: ProviderResult, paths: string
         width: image.width,
         height: image.height,
         prompt: image.prompt,
+        ...(image.revisedPrompt !== undefined && image.revisedPrompt !== image.prompt ? { revisedPrompt: image.revisedPrompt } : {}),
         responseId: image.responseId,
       })),
     })}\n`,
@@ -426,6 +428,12 @@ async function runImageRequest(request: GenerateRequest, edit: EditRequest | und
     const paths = await resolveOutPaths(request.out, entry.provider.name, multiProvider, result.images.length, request.format ?? "png");
     await saveImages(result, paths);
     printResult(entry.provider.name, result, paths);
+    try {
+      await appendUsageLog(usageLogEntry(request, edit, result, paths));
+    } catch {
+      // Images are already saved and reported; a log failure must not change the result.
+      process.stderr.write(`${JSON.stringify({ warning: { kind: "io", message: `Could not append to ${USAGE_LOG_ENV} file.` } })}\n`);
+    }
   }
 }
 

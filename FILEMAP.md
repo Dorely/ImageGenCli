@@ -49,6 +49,7 @@
 | `apps/cli/scripts/bundle.mjs` | esbuild bundler producing the self-contained publishable CLI. |
 | `apps/cli/src/index.ts` | CLI entry point: parsing, auth, profile management, discovery, image commands, and JSON reporting. |
 | `apps/cli/src/help.ts` | Image options, profile management/discovery commands, supported provider guidance, and help examples. |
+| `apps/cli/src/usage-log.ts` | Opt-in `IMAGEGEN_USAGE_LOG` JSONL entries: request shape, dimensions, provider usage; no prompts or secrets. |
 | `apps/cli/src/skill.ts` | Loads and installs the packaged agent skill for the `imagegen skill` command. |
 | `apps/cli/skill/SKILL.md` | Packaged agent instructions for CLI use, model selection, native alpha transparency, and image verification. |
 
@@ -59,7 +60,7 @@
 | `packages/core/package.json` | Workspace package metadata for provider-neutral contracts and shared types. |
 | `packages/core/tsconfig.json` | TypeScript project settings for the core package. |
 | `packages/core/src/index.ts` | Core package barrel exports for contracts and shared helpers. |
-| `packages/core/src/types.ts` | Provider-neutral request/result/error types, upstream retry metadata, and limits. |
+| `packages/core/src/types.ts` | Provider-neutral request/result/error types, revised-prompt and usage metadata, upstream retry metadata, and limits. |
 | `packages/core/src/image-provider.ts` | `IImageProvider` contract and size policies with model-deferred or concrete raster resolution. |
 | `packages/core/src/provider-registry.ts` | Provider registry: routing, configured detection, multi-select. |
 | `packages/core/src/provider-registry.test.ts` | Regression tests for provider resolution. |
@@ -68,6 +69,8 @@
 | `packages/core/src/format.test.ts` | Regression tests for format helpers. |
 | `packages/core/src/image-size.ts` | Size parsing, validation, and provider-limit raster normalization. |
 | `packages/core/src/image-size.test.ts` | Regression tests for size helpers. |
+| `packages/core/src/image-dimensions.ts` | Header-only PNG/JPEG/WebP pixel-dimension reader. |
+| `packages/core/src/image-dimensions.test.ts` | Regression tests for dimension parsing. |
 
 ## Codex Provider Package
 
@@ -76,7 +79,7 @@
 | `packages/providers-codex/package.json` | Workspace metadata for the Codex OAuth and Responses API provider. |
 | `packages/providers-codex/tsconfig.json` | TypeScript project settings for the Codex provider package. |
 | `packages/providers-codex/src/index.ts` | Codex provider barrel exports. |
-| `packages/providers-codex/src/codex-constants.ts` | Codex endpoints, OAuth client, defaults, timeouts, and refresh-lock timing. |
+| `packages/providers-codex/src/codex-constants.ts` | Codex endpoints, OAuth client, defaults, verbatim-prompt orchestration instructions, timeouts, and refresh-lock timing. |
 | `packages/providers-codex/src/pkce.ts` | PKCE pair generation and authorize-URL builder. |
 | `packages/providers-codex/src/pkce.test.ts` | Regression tests for PKCE helpers. |
 | `packages/providers-codex/src/loopback-server.ts` | Temporary localhost callback server for OAuth login. |
@@ -89,11 +92,11 @@
 | `packages/providers-codex/src/token-store.ts` | Codex validation adapter over shared vault/file credential persistence. |
 | `packages/providers-codex/src/account-id.ts` | ChatGPT account-id extraction from the access JWT. |
 | `packages/providers-codex/src/account-id.test.ts` | Regression tests for account-id extraction. |
-| `packages/providers-codex/src/codex-client.ts` | Responses API image provider (generate/edit, streaming, one refreshed retry on 401). |
+| `packages/providers-codex/src/codex-client.ts` | Responses API image provider (generate/edit, streaming, one refreshed retry on 401, actual dimensions, token and plan-limit usage). |
 | `packages/providers-codex/src/codex-client.test.ts` | Mock transport tests for model selection, quality, and edit inputs. |
 | `packages/providers-codex/src/cli-integration.test.ts` | CLI help, validation, request forwarding, and image file saving with mocked provider transport. |
 | `packages/providers-codex/src/codex-entry.ts` | Registry entry wiring the Codex provider and auth status. |
-| `packages/providers-codex/src/sse.ts` | SSE parsing and image-error classification. |
+| `packages/providers-codex/src/sse.ts` | SSE parsing (image, revised prompt, completed-response usage) and image-error classification. |
 | `packages/providers-codex/src/sse.test.ts` | Regression tests for SSE parsing and error kinds. |
 
 ## Shared Credentials and Gemini Provider

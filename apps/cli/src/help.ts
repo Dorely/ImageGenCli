@@ -65,6 +65,8 @@ Use full model IDs; other provider-supported IDs may also be supplied.
 Model precedence: --model > constructor imageModel (library callers) >
 IMAGEGEN_CODEX_IMAGE_MODEL > gpt-image-2.5-flare.
 IMAGEGEN_CODEX_MODEL configures orchestration separately; --model selects images.
+Results report returned dimensions, plus revisedPrompt if the prompt was changed.
+IMAGEGEN_USAGE_LOG=<file> appends one prompt-free JSON usage line per result.
 
 Codex quality: auto (default), low, medium, high; Flare/Sunburst also support
 xhigh and max. gpt-image-2 rejects xhigh/max.

@@ -28,6 +28,7 @@ describe("image model selection", () => {
     const { provider, payload } = setup();
     expect((await provider.generate(request)).imageModel).toBe(models[0]);
     expect(payload().model).toBe("gpt-6-luna");
+    expect(payload().instructions).toMatch(/verbatim/);
     expect(payload().tools[0]).toMatchObject({ model: models[0], background: "auto", output_format: "png" });
     expect(payload().tools[0].quality).toBeUndefined();
   });

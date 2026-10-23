@@ -9,6 +9,10 @@ export const LOOPBACK_PORT = 1455;
 export const CALLBACK_PATH = "/auth/callback";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2.5-flare";
 export const DEFAULT_ORCHESTRATION_MODEL = "gpt-6-luna";
+// Without instructions the orchestration model rewrites the caller's prompt
+// before invoking the image tool; this keeps it a verbatim pass-through.
+export const ORCHESTRATION_INSTRUCTIONS =
+  "You are a pass-through for the image_generation tool. Call it exactly once, using the user's message as the prompt copied verbatim: do not add, remove, rephrase, translate, or expand anything. Do not set or change any tool options; they are already configured. Do not write a text reply.";
 export const DEFAULT_QUALITY = "auto";
 export const DEFAULT_OUTPUT_FORMAT = "png";
 export const REQUEST_TIMEOUT_SECONDS = 600;

@@ -27,7 +27,7 @@ Respect an explicit model choice. Otherwise use the configured model for ordinar
 
 Both 2.5 models accept `--quality auto`, `low`, `medium`, `high`, `xhigh`, or `max`. Keep `auto` unless the task calls for a specific setting; try `low` for drafts. Compare models with the same brief, references, dimensions, and quality. Increase quality for an observed defect; use `xhigh` or `max` when the extra fidelity helps, rather than for every final image. Availability depends on the connected account; do not silently substitute a model after a provider error.
 
-Use `--model` for image selection; `IMAGEGEN_CODEX_MODEL` configures orchestration separately. Do not invent additional flags from API examples.
+Use `--model` for image selection; `IMAGEGEN_CODEX_MODEL` configures orchestration separately. Do not invent additional flags from API examples. If a result includes `revisedPrompt`, the image model received that text rather than your prompt; compare the image against your brief.
 
 ## Native transparency with Codex
 

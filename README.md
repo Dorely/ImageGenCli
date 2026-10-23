@@ -102,9 +102,12 @@ imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a produ
 
 ## Configuration
 
-- `IMAGEGEN_CODEX_MODEL` — optional override for the Codex orchestration model (default `gpt-6-luna`). This model executes the image toolcall and is part of the provider's request shape; it never rewrites the caller's prompt.
+- `IMAGEGEN_CODEX_MODEL` — optional override for the Codex orchestration model (default `gpt-6-luna`). The Codex endpoint runs this model on every request to invoke the image tool, and it consumes plan usage. Left alone it rewrites prompts, so the provider instructs it to pass the caller's prompt through verbatim; if the image model still receives a different prompt, the JSON result includes `revisedPrompt`.
 - `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2.5-flare`); `--model` takes precedence.
 - `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
+- `IMAGEGEN_USAGE_LOG` — optional file path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, whether the prompt was revised, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds orchestration-model tokens, image-tool tokens (`imageGeneration`), and ChatGPT plan windows (`planLimits`: plan type plus 5-hour and weekly used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
+
+Codex reports the dimensions of the returned image, which may differ from the requested `--size`.
 
 The tool is a passthrough: prompts and reference images come from the caller verbatim; the CLI adds no prompt content of its own.
 

@@ -1,4 +1,4 @@
-import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
+import { normalizeOutputFormat, parseSize, ProviderError, readImageDimensions, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -7,6 +7,7 @@ import {
   MAX_IMAGE_COUNT,
   MAX_REFERENCE_IMAGES,
   MIN_IMAGE_COUNT,
+  ORCHESTRATION_INSTRUCTIONS,
   PARTIAL_IMAGES,
   PROVIDER_NAME,
   REQUEST_TIMEOUT_SECONDS,
@@ -83,6 +84,7 @@ function buildPayload(args: {
   }
   return {
     model: args.model,
+    instructions: ORCHESTRATION_INSTRUCTIONS,
     input: [{ role: "user", content }],
     tools: [args.tool],
     tool_choice: { type: "image_generation" },
@@ -205,6 +207,7 @@ export class CodexImageProvider {
     }
 
     const requestId =
+      response.headers.get("x-oai-request-id") ??
       response.headers.get("x-request-id") ??
       response.headers.get("openai-request-id") ??
       response.headers.get("request-id") ??
@@ -229,14 +232,24 @@ export class CodexImageProvider {
     } catch (error) {
       throw toProviderError(error, requestId);
     }
+    // The backend may not honor the requested size, so report what came back.
+    const dimensions = readImageDimensions(parsed.data) ?? size;
     return {
       data: parsed.data,
       mimeType: `image/${format}`,
-      width: size.width,
-      height: size.height,
+      width: dimensions.width,
+      height: dimensions.height,
       prompt,
+      revisedPrompt: parsed.revisedPrompt,
       responseId: parsed.responseId,
       callId: parsed.callId,
+      usage: {
+        requestId,
+        orchestrationModel: parsed.responseModel ?? this.orchestrationModel,
+        orchestration: parsed.usage,
+        imageGeneration: parsed.imageUsage,
+        planLimits: readPlanLimits(response.headers),
+      },
     };
   }
   private async post(accessToken: string, body: string): Promise<Response> {
@@ -261,6 +274,28 @@ export class CodexImageProvider {
       clearTimeout(timer);
     }
   }
+}
+
+// ChatGPT plan usage windows reported on every Codex response. Only the named
+// numeric/plan fields are read; opaque headers such as turn state are skipped.
+function readPlanLimits(headers: Headers): Record<string, unknown> | undefined {
+  const number = (name: string): number | undefined => {
+    const value = headers.get(`x-codex-${name}`);
+    const parsed = value === null ? Number.NaN : Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+  const window = (name: "primary" | "secondary") => {
+    const usedPercent = number(`${name}-used-percent`);
+    if (usedPercent === undefined) return undefined;
+    return { usedPercent, windowMinutes: number(`${name}-window-minutes`), resetAt: number(`${name}-reset-at`) };
+  };
+  const limits = {
+    planType: headers.get("x-codex-plan-type") ?? undefined,
+    activeLimit: headers.get("x-codex-active-limit") ?? undefined,
+    primary: window("primary"),
+    secondary: window("secondary"),
+  };
+  return Object.values(limits).some((value) => value !== undefined) ? limits : undefined;
 }
 
 async function readSseLines(body: ReadableStream<Uint8Array>): Promise<string[]> {

@@ -36,6 +36,17 @@ describe("parseImageStreamEvents", () => {
     expect(result.revisedPrompt).toBe("rev");
   });
 
+  it("reads usage from response.completed after the image item", () => {
+    const image = Buffer.from("pixels").toString("base64");
+    const result = parseImageStreamEvents([
+      dataEvent({ type: "response.output_item.done", item: { type: "image_generation_call", result: image } }),
+      dataEvent({ type: "response.completed", response: { id: "resp-2", model: "gpt-6-luna", output: [], usage: { output_tokens: 33 }, tool_usage: { image_gen: { output_tokens: 429 } } } }),
+      "data: [DONE]",
+    ]);
+    expect(Buffer.from(result.data).toString()).toBe("pixels");
+    expect(result).toMatchObject({ responseId: "resp-2", responseModel: "gpt-6-luna", usage: { output_tokens: 33 }, imageUsage: { output_tokens: 429 } });
+  });
+
   it("throws classified errors on failure events", () => {
     expect(() =>
       parseImageStreamEvents([dataEvent({ type: "response.failed", response: { error: { message: "Rate limit" } } })]),
