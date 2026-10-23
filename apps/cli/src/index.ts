@@ -57,6 +57,10 @@ function parseArgs(argv: string[]): { flags: Map<string, string | boolean | stri
       flags.set("help", true);
       continue;
     }
+    if (arg === "--version") {
+      flags.set("version", true);
+      continue;
+    }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
       if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "api", "base-url", "auth", "key-stdin", "no-open", "show-path", "target", "force"].includes(key)) {
@@ -94,6 +98,11 @@ function imageModel(flags: Map<string, string | boolean | string[]>): string | u
   const model = flagValue(flags, "model")?.trim();
   if (model !== undefined && !model) fail("usage", "--model must not be blank.", EXIT_USAGE);
   return model;
+}
+
+async function cliVersion(): Promise<string> {
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+  return manifest.version;
 }
 
 function redirectUri(): string {
@@ -438,6 +447,11 @@ async function runImageRequest(request: GenerateRequest, edit: EditRequest | und
 
 async function main(): Promise<void> {
   const { flags, positionals } = parseArgs(process.argv.slice(2));
+  if (flags.get("version")) {
+    process.stdout.write(`${await cliVersion()}
+`);
+    return;
+  }
   if (flags.get("help") || positionals.length === 0) {
     process.stdout.write(helpFor(positionals[0]));
     return;

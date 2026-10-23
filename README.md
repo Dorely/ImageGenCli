@@ -53,6 +53,7 @@ imagegen generate --prompt "same lighthouse, dusk" --provider codex --out ./dusk
 imagegen edit --prompt "add seagulls" --source ./lighthouse.png --out ./gulls.png
 imagegen skill
 imagegen help [command]
+imagegen --version
 ```
 
 Each provider has its own auth namespace (`auth codex ...`, `auth gemini ...`); several can stay configured at once. `generate` and `edit` take a repeatable `--provider` flag: omit it when only one provider is configured, pass one or more names otherwise. Multi-provider runs write `<provider>-`-prefixed files and print one JSON result per provider.

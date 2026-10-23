@@ -104,6 +104,7 @@ Usage:
   imagegen skill
   imagegen skill install --target <claude|codex|skills-dir> [--target <...>] [--force]
   imagegen help [command]
+  imagegen --version
 
 ${PROFILE_HELP}
 ${IMAGE_OPTIONS}
@@ -119,6 +120,7 @@ Auth options:
 
 Global:
   -h, --help             Show help and exit 0
+  --version              Print the CLI version and exit 0
 `;
 
 const COMMAND_HELP: Record<string, string> = {

@@ -84,6 +84,17 @@ describe("CLI help", () => {
   });
 });
 
+describe("CLI version", () => {
+  it.each([["--version"], ["generate", "--version"]])("prints the CLI package version for %j", async (...args) => {
+    const { version } = JSON.parse(await readFile(new URL("../../../apps/cli/package.json", import.meta.url), "utf8"));
+    await run(args);
+    expect(stdout).toBe(`${version}
+`);
+    expect(state.payloads).toHaveLength(0);
+    expect(stderr).toBe("");
+  });
+});
+
 describe("CLI skill installation", () => {
   it("installs the packaged skill in a custom skills directory", async () => {
     await run(["skill", "install", "--target", directory]);
