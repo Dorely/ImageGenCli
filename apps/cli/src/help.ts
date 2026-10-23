@@ -25,7 +25,7 @@ Supported protocols: OpenRouter dedicated Images API and OpenAI Images JSON /
 multipart endpoints, not arbitrary HTTP templates. Options vary by model.
 OpenRouter accepts aspect ratios; openai-images needs pixels or presets:
 square 1024x1024, portrait 1024x1536, landscape 1536x1024, wide 1536x864.
-Auto options are omitted. Native masks require openai-images or Codex.
+Auto options are omitted. Native masks require openai-images.
 Outputs are measured and converted to PNG/JPEG/WebP without resizing. Count uses
 separate single-image requests without automatic retries or model substitution.
 `;
@@ -64,8 +64,8 @@ Supported Codex models (account availability is determined by the provider):
 Use full model IDs; other provider-supported IDs may also be supplied.
 Model precedence: --model > constructor imageModel (library callers) >
 IMAGEGEN_CODEX_IMAGE_MODEL > gpt-image-2.5-flare.
-IMAGEGEN_CODEX_MODEL configures orchestration separately; --model selects images.
-Results report returned dimensions, plus revisedPrompt if the prompt was changed.
+Codex may override the requested model, quality, and size; results report the
+returned dimensions. Codex ignores --mask; describe the region in the prompt.
 IMAGEGEN_USAGE_LOG=<file> appends one prompt-free JSON usage line per result.
 
 Codex quality: auto (default), low, medium, high; Flare/Sunburst also support
@@ -81,7 +81,7 @@ const GENERATE_EXAMPLES = `Examples:
 
 const EDIT_EXAMPLES = `Edit options:
   --source <file>        Source image (required)
-  --mask <file>          Optional edit mask (Codex or openai-images)
+  --mask <file>          Optional edit mask (openai-images; Codex ignores it)
 
 Examples:
   imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp

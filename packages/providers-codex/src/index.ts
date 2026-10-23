@@ -7,4 +7,4 @@ export * from "./token-store.js";
 export * from "./account-id.js";
 export * from "./codex-client.js";
 export * from "./codex-entry.js";
-export * from "./sse.js";
+export * from "./errors.js";

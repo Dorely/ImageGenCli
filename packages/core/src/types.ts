@@ -28,10 +28,7 @@ export interface GeneratedImage {
   width: number;
   height: number;
   prompt: string;
-  // Prompt the image model actually received, when the provider reports it.
-  revisedPrompt?: string;
   responseId?: string;
-  callId?: string;
   // Provider-reported metering for this image (tokens, plan limits). JSON-safe,
   // provider-specific shape; never contains credentials or prompts.
   usage?: Record<string, unknown>;

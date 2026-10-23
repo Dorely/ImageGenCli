@@ -25,15 +25,29 @@ Respect an explicit model choice. Otherwise use the configured model for ordinar
 | `gpt-image-2.5-sunburst` | Demanding detail, text, or subject-preservation work when Flare falls short; also supports native alpha transparency. |
 | `gpt-image-2` | Existing workflows or an explicit user choice; quality supports up to `high`. |
 
-Both 2.5 models accept `--quality auto`, `low`, `medium`, `high`, `xhigh`, or `max`. Keep `auto` unless the task calls for a specific setting; try `low` for drafts. Compare models with the same brief, references, dimensions, and quality. Increase quality for an observed defect; use `xhigh` or `max` when the extra fidelity helps, rather than for every final image. Availability depends on the connected account; do not silently substitute a model after a provider error.
+Both 2.5 models accept `--quality auto`, `low`, `medium`, `high`, `xhigh`, or `max`. Keep `auto` unless the task calls for a specific setting. Availability depends on the connected account; do not silently substitute a model after a provider error. Do not invent additional flags from API examples.
 
-Use `--model` for image selection; `IMAGEGEN_CODEX_MODEL` configures orchestration separately. Do not invent additional flags from API examples. If a result includes `revisedPrompt`, the image model received that text rather than your prompt; compare the image against your brief.
+## Codex usage and what the backend honors
+
+Codex requests go directly to the Codex image endpoints. No text model runs, your prompt reaches the image model verbatim, and each image draws on the ChatGPT plan's separate daily image allowance, not the Codex 5-hour or weekly limits. Each `--count` image is a separate request.
+
+The backend decides what it renders. As observed on a Plus account in October 2026:
+
+- **Quality:** it served `low` whatever was requested.
+- **Size:** it returned about 1.57 MP at a varying aspect (for example 1374x1145) rather than the requested `--size`.
+- **Model:** it accepted any model value without error.
+
+Treat `--quality`, `--size`, and `--model` as requests, not guarantees, and do not burn allowance retrying just to change them. Read `width` and `height` from the JSON result; crop or resize locally when exact dimensions matter. `IMAGEGEN_USAGE_LOG=<file>` records what was actually served and the allowance used percent.
+
+- **Mask:** Codex ignores `--mask`, which is accepted for compatibility with the shared CLI surface. Name the region to change and what to preserve in the prompt instead.
+- **Format:** the endpoint returns PNG. JPEG and WebP are converted locally.
+- **Cost:** a low-quality opaque image costs roughly 450 image tokens. Each input image adds roughly 1,500 input tokens. Transparent output renders at medium quality and costs about two to four times as much, so request transparency only when the asset needs it.
 
 ## Native transparency with Codex
 
 When the brief calls for a reusable cutout, sticker, sprite, icon, logo, or overlay with an empty background, request native transparency from a 2.5 model first. Do not default to a chroma background, color keying, or a separate background-removal pass. Preserve a requested scene or solid background.
 
-The current Codex CLI sends `background: auto` and has **no `--background` flag**. Request transparency in `--prompt`; the automatic setting lets the model follow the brief. Public API examples using `background="transparent"` are not CLI syntax.
+The Codex provider sends `background: auto` and the CLI has **no `--background` flag**. Request transparency in `--prompt`; the automatic setting lets the model follow the brief and produce real alpha. Public API examples using `background="transparent"` are not CLI syntax.
 
 - Use `--format png` (preferred) or `--format webp`; JPEG cannot retain alpha. If the user also requires JPEG, explain the conflict before changing their requested deliverable.
 - Specify real alpha transparency, isolated subject, empty surrounding pixels, and clean edges. Exclude a painted checkerboard or solid replacement backdrop. Keep intentional empty space; omit scenery, floors, horizons, and cast shadows unless requested. Preserve meaningful translucency in glass, hair, and soft edges.
@@ -53,7 +67,7 @@ Describe the intended use, composition, style, and essential constraints. Quote 
 
 Identify reference roles in the prompt. In generation, images follow `--reference` order; in editing, the source is image 1 and references follow it. The current Codex request uses at most four input images total, including the edit source. Keep important identity and style references consistent across iterations.
 
-Use `--size` for dimensions or aspect ratio. For 2.5 custom rasters, edges must be multiples of 16, at most 3840 pixels, with aspect ratio at most 3:1 and total pixels from 655360 to 8294400. Above 3686400 pixels is experimental; inspect carefully. The CLI normalizes sizes to a legal raster and also accepts `auto`, aspect ratios, and presets; check the result's `width` and `height` and read help for current behavior.
+Use `--size` for dimensions or aspect ratio. The CLI normalizes sizes to a legal 2.5 raster (16-pixel multiples, edges at most 3840, aspect at most 3:1) and also accepts `auto`, aspect ratios, and presets, but Codex may still return a different size (see above). Check the result's `width` and `height` and read help for current behavior.
 
 Model guidance: [OpenAI image prompting](https://developers.openai.com/api/docs/guides/image-prompting) and [output settings](https://developers.openai.com/api/docs/guides/image-generation#customize-image-output). These describe public APIs; use the CLI's actual help for supported flags.
 

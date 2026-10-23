@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "license": "MIT",
-  "description": "Codex OAuth and Responses API image provider for ImageGenCli.",
+  "description": "Codex OAuth and image endpoint provider for ImageGenCli.",
   "author": "Dorely",
   "homepage": "https://github.com/Dorely/ImageGenCli",
   "repository": {
@@ -26,7 +26,8 @@
   },
   "dependencies": {
     "@imagegencli/core": "0.2.0",
-    "@imagegencli/credentials": "0.2.0"
+    "@imagegencli/credentials": "0.2.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

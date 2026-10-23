@@ -1,29 +1,27 @@
-import { normalizeOutputFormat, parseSize, ProviderError, readImageDimensions, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
+import sharp from "sharp";
+import { normalizeOutputFormat, parseSize, ProviderError, type EditRequest, type GenerateRequest, type ImageInput, type ImageSize, type ImageSizePolicy, type OutputFormat, type ProviderResult } from "@imagegencli/core";
 import { extractAccountId } from "./account-id.js";
 import {
   DEFAULT_IMAGE_MODEL,
-  DEFAULT_ORCHESTRATION_MODEL,
   DEFAULT_QUALITY,
+  IMAGES_ENDPOINT,
   MAX_IMAGE_COUNT,
   MAX_REFERENCE_IMAGES,
   MIN_IMAGE_COUNT,
-  ORCHESTRATION_INSTRUCTIONS,
-  PARTIAL_IMAGES,
   PROVIDER_NAME,
   REQUEST_TIMEOUT_SECONDS,
-  RESPONSES_ENDPOINT,
   USER_AGENT,
 } from "./codex-constants.js";
 import type { CodexTokenManager } from "./codex-token-manager.js";
-import { classifyImageError, parseImageStreamEvents } from "./sse.js";
+import { classifyImageError, readErrorMessage } from "./errors.js";
 
 export interface CodexClientOptions {
-  model?: string;
   imageModel?: string;
   timeoutSeconds?: number;
-  partialImages?: number;
   fetchImpl?: typeof fetch;
 }
+
+type ImageEndpoint = "generations" | "edits";
 
 function toDataUrl(image: ImageInput): string {
   return `data:${image.contentType};base64,${Buffer.from(image.data).toString("base64")}`;
@@ -45,136 +43,46 @@ function resolveSize(size: string | undefined): ImageSize {
   }
 }
 
-function baseImageTool(args: {
-  size?: string;
-  quality?: string;
-  outputFormat: OutputFormat;
-  outputCompression?: number;
-  imageModel: string;
-  action: "generate" | "edit";
-  partialImages: number;
-}): Record<string, unknown> {
-  const tool: Record<string, unknown> = {
-    type: "image_generation",
-    model: args.imageModel,
-    action: args.action,
-    size: args.size && args.size.trim() ? args.size.trim() : "auto",
-    output_format: args.outputFormat,
+// The endpoint always returns PNG; output format is converted locally. Background
+// stays on auto so a prompt asking for real alpha transparency can produce it.
+function buildBody(args: { prompt: string; model: string; size: ImageSize; quality: string; images: ImageInput[] }): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    prompt: args.prompt,
+    model: args.model,
+    size: args.size.size,
     background: "auto",
   };
-  if (args.partialImages > 0) tool["partial_images"] = Math.min(3, Math.max(0, args.partialImages));
-  if (args.quality && args.quality.trim() && args.quality.trim().toLowerCase() !== "auto") {
-    tool["quality"] = args.quality.trim();
-  }
-  if (args.outputFormat === "jpeg" && typeof args.outputCompression === "number") {
-    tool["output_compression"] = Math.min(100, Math.max(0, Math.trunc(args.outputCompression)));
-  }
-  return tool;
-}
-
-function buildPayload(args: {
-  model: string;
-  prompt: string;
-  references: ImageInput[];
-  tool: Record<string, unknown>;
-}): Record<string, unknown> {
-  const content: Record<string, unknown>[] = [{ type: "input_text", text: args.prompt }];
-  for (const reference of args.references.slice(0, MAX_REFERENCE_IMAGES)) {
-    content.push({ type: "input_image", image_url: toDataUrl(reference), detail: "auto" });
-  }
-  return {
-    model: args.model,
-    instructions: ORCHESTRATION_INSTRUCTIONS,
-    input: [{ role: "user", content }],
-    tools: [args.tool],
-    tool_choice: { type: "image_generation" },
-    stream: true,
-    store: false,
-  };
+  const quality = args.quality.trim();
+  if (quality && quality.toLowerCase() !== "auto") body["quality"] = quality;
+  if (args.images.length > 0) body["images"] = args.images.map((image) => ({ image_url: toDataUrl(image) }));
+  return body;
 }
 
 export class CodexImageProvider {
   readonly name = PROVIDER_NAME;
   readonly sizePolicy = { resolveSize: (size: string | undefined) => resolveSize(size) } satisfies ImageSizePolicy;
-  private readonly orchestrationModel: string;
   private readonly imageModel: string;
   private readonly timeoutSeconds: number;
-  private readonly partialImages: number;
   private readonly fetchImpl: typeof fetch;
 
   constructor(
     private readonly tokens: CodexTokenManager,
     options: CodexClientOptions = {},
   ) {
-    // API quirk: the Codex Responses endpoint requires an orchestration model
-    // field on every request even though the image_generation tool does all the
-    // work. This value never touches the caller's prompt and is not exposed in
-    // output; keep it in provider config, not in CLI surface or contracts.
-    this.orchestrationModel = options.model ?? process.env["IMAGEGEN_CODEX_MODEL"] ?? DEFAULT_ORCHESTRATION_MODEL;
     this.imageModel = options.imageModel ?? process.env["IMAGEGEN_CODEX_IMAGE_MODEL"] ?? DEFAULT_IMAGE_MODEL;
     this.timeoutSeconds = options.timeoutSeconds ?? REQUEST_TIMEOUT_SECONDS;
-    this.partialImages = options.partialImages ?? PARTIAL_IMAGES;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
   async generate(request: GenerateRequest): Promise<ProviderResult> {
-    const format = normalizeOutputFormat(request.format);
-    const size = this.sizePolicy.resolveSize(request.size);
-    const imageModel = this.resolveImageModel(request);
-    return this.runAll({
-      format,
-      imageModel,
-      count: normalizeCount(request.count),
-      prompt: request.prompt,
-      size,
-      build: () =>
-        buildPayload({
-          model: this.orchestrationModel,
-          prompt: request.prompt,
-          references: request.referenceImages ?? [],
-          tool: baseImageTool({
-            size: size.size,
-            quality: request.quality ?? DEFAULT_QUALITY,
-            outputFormat: format,
-            imageModel,
-            action: "generate",
-            partialImages: this.partialImages,
-          }),
-        }),
-    });
+    // Reference images require the edits endpoint; generations takes text only.
+    const references = (request.referenceImages ?? []).slice(0, MAX_REFERENCE_IMAGES);
+    return this.runAll(request, references.length > 0 ? "edits" : "generations", references);
   }
 
   async edit(request: EditRequest): Promise<ProviderResult> {
-    const format = normalizeOutputFormat(request.format);
-    const size = this.sizePolicy.resolveSize(request.size);
-    const imageModel = this.resolveImageModel(request);
-    const references: ImageInput[] = [request.sourceImage, ...(request.referenceImages ?? [])];
-    return this.runAll({
-      format,
-      imageModel,
-      count: normalizeCount(request.count),
-      prompt: request.prompt,
-      size,
-      build: () => {
-        const tool = baseImageTool({
-          size: size.size,
-          quality: request.quality ?? DEFAULT_QUALITY,
-          outputFormat: format,
-          imageModel,
-          action: "edit",
-          partialImages: this.partialImages,
-        });
-        if (request.mask) {
-          tool["input_image_mask"] = { image_url: toDataUrl(request.mask) };
-        }
-        return buildPayload({
-          model: this.orchestrationModel,
-          prompt: request.prompt,
-          references,
-          tool,
-        });
-      },
-    });
+    // The images endpoint has no mask input: a mask is accepted and ignored.
+    return this.runAll(request, "edits", [request.sourceImage, ...(request.referenceImages ?? [])].slice(0, MAX_REFERENCE_IMAGES));
   }
 
   private resolveImageModel(request: GenerateRequest): string {
@@ -187,84 +95,99 @@ export class CodexImageProvider {
     return model;
   }
 
-  private async runAll(args: { imageModel: string; format: OutputFormat; count: number; prompt: string; size: ImageSize; build: () => Record<string, unknown> }): Promise<ProviderResult> {
-    const images: ProviderResult["images"] = [];
-    for (let i = 0; i < args.count; i += 1) {
-      images.push(await this.sendOnce(args.build(), args.format, args.prompt, args.size));
+  private async runAll(request: GenerateRequest, endpoint: ImageEndpoint, images: ImageInput[]): Promise<ProviderResult> {
+    const format = normalizeOutputFormat(request.format);
+    const size = this.sizePolicy.resolveSize(request.size);
+    const imageModel = this.resolveImageModel(request);
+    const body = JSON.stringify(buildBody({ prompt: request.prompt, model: imageModel, size, quality: request.quality ?? DEFAULT_QUALITY, images }));
+    const results: ProviderResult["images"] = [];
+    // The endpoint returns one image per call regardless of `n`.
+    for (let i = 0, count = normalizeCount(request.count); i < count; i += 1) {
+      results.push(await this.sendOnce(endpoint, body, format, request.prompt));
     }
-    return { provider: this.name, imageModel: args.imageModel, images };
+    return { provider: this.name, imageModel, images: results };
   }
 
-  private async sendOnce(payload: Record<string, unknown>, format: OutputFormat, prompt: string, size: ImageSize): Promise<ProviderResult["images"][number]> {
-    const body = JSON.stringify(payload);
+  private async sendOnce(endpoint: ImageEndpoint, body: string, format: OutputFormat, prompt: string): Promise<ProviderResult["images"][number]> {
     let accessToken = await this.tokens.getValidAccessToken();
-    let response = await this.post(accessToken, body);
+    let response = await this.post(endpoint, accessToken, body);
     if (response.status === 401) {
       // Retry once with refreshed credentials; refresh rejection surfaces as a reauth error.
       await response.body?.cancel();
       accessToken = await this.tokens.recoverFromUnauthorized(accessToken);
-      response = await this.post(accessToken, body);
+      response = await this.post(endpoint, accessToken, body);
     }
 
     const requestId =
+      response.headers.get("x-codex-imagegen-request-id") ??
       response.headers.get("x-oai-request-id") ??
       response.headers.get("x-request-id") ??
-      response.headers.get("openai-request-id") ??
-      response.headers.get("request-id") ??
       undefined;
 
-    if (!response.ok || !response.body) {
+    if (!response.ok) {
       const errorText = await response.text().catch(() => "");
       const kind = classifyImageError(errorText);
       const detail = readErrorMessage(errorText);
+      const retryAfter = Number(response.headers.get("retry-after"));
       throw new ProviderError({
         kind,
         message: detail ? `Codex image request returned ${response.status} (${kind}): ${detail}` : `Codex image request returned ${response.status} (${kind}).`,
         statusCode: response.status,
         requestId,
+        ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterSeconds: retryAfter } : {}),
       });
     }
 
-    const lines = await readSseLines(response.body);
-    let parsed: ReturnType<typeof parseImageStreamEvents>;
-    try {
-      parsed = parseImageStreamEvents(lines);
-    } catch (error) {
-      throw toProviderError(error, requestId);
+    const payload = record(await response.json().catch(() => null));
+    const item = Array.isArray(payload["data"]) ? record(payload["data"][0]) : {};
+    if (typeof item["b64_json"] !== "string" || !item["b64_json"]) {
+      throw new ProviderError({ kind: "no_image", message: "Codex image request returned no image data.", requestId });
     }
-    // The backend may not honor the requested size, so report what came back.
-    const dimensions = readImageDimensions(parsed.data) ?? size;
+
+    let data: Buffer = Buffer.from(item["b64_json"], "base64");
+    let width: number;
+    let height: number;
+    try {
+      const metadata = await sharp(data).metadata();
+      if (!metadata.width || !metadata.height || !["png", "jpeg", "webp"].includes(metadata.format ?? "")) throw new Error();
+      // Decode to verify that a valid header is not concealing truncated pixels.
+      await sharp(data).stats();
+      if (metadata.format !== format) data = await sharp(data).toFormat(format).toBuffer();
+      width = metadata.width;
+      height = metadata.height;
+    } catch {
+      throw new ProviderError({ kind: "malformed", message: "Codex returned an invalid raster image.", requestId });
+    }
+
     return {
-      data: parsed.data,
+      data,
       mimeType: `image/${format}`,
-      width: dimensions.width,
-      height: dimensions.height,
+      width,
+      height,
       prompt,
-      revisedPrompt: parsed.revisedPrompt,
-      responseId: parsed.responseId,
-      callId: parsed.callId,
+      responseId: typeof item["generation_id"] === "string" ? item["generation_id"] : undefined,
       usage: {
         requestId,
-        orchestrationModel: parsed.responseModel ?? this.orchestrationModel,
-        orchestration: parsed.usage,
-        imageGeneration: parsed.imageUsage,
+        imageGeneration: payload["usage"],
+        // What the backend actually rendered; it may override requested size and quality.
+        served: { size: payload["size"], quality: payload["quality"], background: payload["background"] },
         planLimits: readPlanLimits(response.headers),
       },
     };
   }
-  private async post(accessToken: string, body: string): Promise<Response> {
+
+  private async post(endpoint: ImageEndpoint, accessToken: string, body: string): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutSeconds * 1000);
     try {
-      return await this.fetchImpl(RESPONSES_ENDPOINT, {
+      return await this.fetchImpl(`${IMAGES_ENDPOINT}/${endpoint}`, {
         method: "POST",
         headers: {
           authorization: `Bearer ${accessToken}`,
           "chatgpt-account-id": extractAccountId(accessToken),
-          "OpenAI-Beta": "responses=experimental",
           originator: "pi",
           "user-agent": USER_AGENT,
-          accept: "text/event-stream",
+          accept: "application/json",
           "content-type": "application/json",
         },
         body,
@@ -276,8 +199,12 @@ export class CodexImageProvider {
   }
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
 // ChatGPT plan usage windows reported on every Codex response. Only the named
-// numeric/plan fields are read; opaque headers such as turn state are skipped.
+// numeric/plan fields are read; other x-codex headers are skipped.
 function readPlanLimits(headers: Headers): Record<string, unknown> | undefined {
   const number = (name: string): number | undefined => {
     const value = headers.get(`x-codex-${name}`);
@@ -286,8 +213,10 @@ function readPlanLimits(headers: Headers): Record<string, unknown> | undefined {
   };
   const window = (name: "primary" | "secondary") => {
     const usedPercent = number(`${name}-used-percent`);
-    if (usedPercent === undefined) return undefined;
-    return { usedPercent, windowMinutes: number(`${name}-window-minutes`), resetAt: number(`${name}-reset-at`) };
+    const windowMinutes = number(`${name}-window-minutes`);
+    // A zero-minute window is an unused slot, not a limit.
+    if (usedPercent === undefined || !windowMinutes) return undefined;
+    return { usedPercent, windowMinutes, resetAt: number(`${name}-reset-at`) };
   };
   const limits = {
     planType: headers.get("x-codex-plan-type") ?? undefined,
@@ -296,51 +225,4 @@ function readPlanLimits(headers: Headers): Record<string, unknown> | undefined {
     secondary: window("secondary"),
   };
   return Object.values(limits).some((value) => value !== undefined) ? limits : undefined;
-}
-
-async function readSseLines(body: ReadableStream<Uint8Array>): Promise<string[]> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  const lines: string[] = [];
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let index = buffer.indexOf("\n");
-    while (index >= 0) {
-      const line = buffer.slice(0, index);
-      buffer = buffer.slice(index + 1);
-      if (line.startsWith("data:")) lines.push(line);
-      index = buffer.indexOf("\n");
-    }
-  }
-  if (buffer.startsWith("data:")) lines.push(buffer);
-  return lines;
-}
-
-function readErrorMessage(body: string): string | null {
-  if (!body.trim()) return null;
-  try {
-    const parsed = JSON.parse(body) as unknown;
-    if (typeof parsed === "object" && parsed !== null) {
-      const record = parsed as Record<string, unknown>;
-      if (typeof record["message"] === "string") return record["message"];
-      if (typeof record["detail"] === "string") return record["detail"];
-      const error = record["error"];
-      if (typeof error === "object" && error !== null && typeof (error as Record<string, unknown>)["message"] === "string") {
-        return (error as Record<string, unknown>)["message"] as string;
-      }
-    }
-  } catch {
-    return body.slice(0, 500);
-  }
-  return null;
-}
-
-function toProviderError(error: unknown, requestId: string | undefined): ProviderError {
-  const message = error instanceof Error ? error.message : String(error);
-  const separator = message.indexOf(":");
-  const kind = separator > 0 ? message.slice(0, separator) : "api_error";
-  return new ProviderError({ kind, message, requestId });
 }

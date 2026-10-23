@@ -206,7 +206,6 @@ function printResult(providerName: string, result: ProviderResult, paths: string
         width: image.width,
         height: image.height,
         prompt: image.prompt,
-        ...(image.revisedPrompt !== undefined && image.revisedPrompt !== image.prompt ? { revisedPrompt: image.revisedPrompt } : {}),
         responseId: image.responseId,
       })),
     })}\n`,

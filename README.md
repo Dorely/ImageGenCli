@@ -6,7 +6,7 @@ ImageGenCli is a provider-agnostic command-line tool for programmatic image gene
 
 ## Current Status
 
-- Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex Responses API (default `gpt-image-2.5-flare`, with Sunburst and `gpt-image-2` selectable).
+- Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex image endpoints (default `gpt-image-2.5-flare`, with Sunburst and `gpt-image-2` selectable).
 - Named API profiles implemented: OpenRouter and OpenAI Images-compatible endpoints, stored-key auth, explicit model discovery, and upstream quota diagnostics.
 - Gemini provider implemented: stored API key, stateless Interactions API generation, references, independent edits, native-size normalization, and PNG/JPEG/WebP delivery.
 
@@ -88,11 +88,13 @@ Both `generate` and `edit` accept `--model <id>`. Run `imagegen help`, `imagegen
 | `gpt-image-2.5-sunburst` | Higher-precision generation and editing | auto, low, medium, high, xhigh, max |
 | `gpt-image-2` | Previous model; retained for compatibility | auto, low, medium, high |
 
-Use full model IDs. Other provider-supported IDs remain accepted; actual account availability is determined by Codex. Unsupported models fail without automatic fallback. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, `IMAGEGEN_CODEX_IMAGE_MODEL`, then Flare. The orchestration model is configured separately.
+Use full model IDs. Other provider-supported IDs remain accepted; actual account availability is determined by Codex. Unsupported models fail without automatic fallback. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, `IMAGEGEN_CODEX_IMAGE_MODEL`, then Flare.
 
-Quality defaults to `auto`. See the [official image tool documentation](https://developers.openai.com/api/docs/guides/tools-image-generation#tool-options).
+Quality defaults to `auto`. Requests go straight to the Codex image endpoints (`/backend-api/codex/images/generations` and `/edits`, the ones the Codex app's own image tool uses): no orchestration model runs, the prompt reaches the image model verbatim, and usage draws on the plan's separate daily image allowance rather than the 5-hour/weekly Codex limits.
 
-For native transparent assets, use a 2.5 model, PNG or WebP, and explicitly request real alpha transparency in the prompt. The Codex CLI keeps the tool background on `auto`; it does not expose `--background`. Check the decoded alpha channel before accepting a cutout, and repeat the transparency requirement during later edits. See the [packaged skill](apps/cli/skill/SKILL.md) for examples and model guidance.
+The backend decides what it actually renders. Observed on a Plus account (October 2026): it may serve a different quality (`low` regardless of the request) and size (about 1.57 MP at a varying aspect) than requested, and it accepts any `model` value without error. Read `width`/`height` from the JSON result; the usage log records what was served. The endpoint always returns PNG, so JPEG and WebP are converted locally. It has no mask input: `--mask` is accepted and ignored for Codex.
+
+For native transparent assets, use a 2.5 model, PNG or WebP, and explicitly request real alpha transparency in the prompt. The Codex provider keeps `background` on `auto`; the CLI does not expose `--background`. Transparent output renders at medium quality and costs roughly two to four times the image tokens of an opaque low-quality image. Check the decoded alpha channel before accepting a cutout, and repeat the transparency requirement during later edits. See the [packaged skill](apps/cli/skill/SKILL.md) for examples and model guidance.
 
 ```sh
 imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp
@@ -102,12 +104,9 @@ imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a produ
 
 ## Configuration
 
-- `IMAGEGEN_CODEX_MODEL` — optional override for the Codex orchestration model (default `gpt-6-luna`). The Codex endpoint runs this model on every request to invoke the image tool, and it consumes plan usage. Left alone it rewrites prompts, so the provider instructs it to pass the caller's prompt through verbatim; if the image model still receives a different prompt, the JSON result includes `revisedPrompt`.
 - `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2.5-flare`); `--model` takes precedence.
 - `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
-- `IMAGEGEN_USAGE_LOG` — optional file path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, whether the prompt was revised, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds orchestration-model tokens, image-tool tokens (`imageGeneration`), and ChatGPT plan windows (`planLimits`: plan type plus 5-hour and weekly used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
-
-Codex reports the dimensions of the returned image, which may differ from the requested `--size`.
+- `IMAGEGEN_USAGE_LOG` — optional file path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds the image request ID, image tokens (`imageGeneration`), the size/quality/background actually served (`served`), and the ChatGPT plan window reported with the response (`planLimits`: plan type, active limit, and daily image allowance used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
 
 The tool is a passthrough: prompts and reference images come from the caller verbatim; the CLI adds no prompt content of its own.
 
@@ -127,7 +126,7 @@ ImageGenCli follows the architecture direction in `VISION.md`:
 - Update `FILEMAP.md` whenever source files are added, removed, renamed, or significantly repurposed.
 - Read `VISION.md` and `FILEMAP.md` before making substantive changes.
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a public contribution.
-- Codex auth and Responses image-calling patterns follow the Lorekeeper repo (`CodexAuthService`, `CodexProvider`, `CodexProjectImageProvider`).
+- Codex auth follows the Lorekeeper repo's OAuth PKCE pattern (`CodexAuthService`); image calls use the Codex image endpoints called by the Codex app (codex-rs `codex-api/src/endpoint/images.rs`).
 
 ## License
 

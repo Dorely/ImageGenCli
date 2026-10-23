@@ -41,7 +41,7 @@ The CLI layer stays thin: argument parsing, validation, and result reporting. Al
 ## Phase 1: Codex (OpenAI GPT Image)
 
 - Authenticate with Codex OAuth (PKCE flow), following the auth and calling patterns established in the Lorekeeper repo.
-- Generate and edit images through the Codex Responses API, defaulting to `gpt-image-2.5-flare`, with optional model selection for `gpt-image-2.5-sunburst`, `gpt-image-2`, or other provider-supported models.
+- Generate and edit images through the Codex image endpoints, defaulting to `gpt-image-2.5-flare`, with optional model selection for `gpt-image-2.5-sunburst`, `gpt-image-2`, or other provider-supported models.
 - Support the portable core options: prompt, size, quality, output format, and count.
 - Write image files to explicit output paths and report machine-readable results.
 
@@ -75,7 +75,7 @@ imagegencli/
 │   └── cli/                     # command surface: parse, validate, report
 ├── packages/
 │   ├── core/                    # provider-neutral contracts and shared types
-│   ├── providers-codex/         # Codex OAuth + Responses API transport
+│   ├── providers-codex/         # Codex OAuth + image endpoint transport
 │   └── providers-google/        # Google API-key provider (phase 2)
 ```
 

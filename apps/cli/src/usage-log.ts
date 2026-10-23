@@ -26,7 +26,6 @@ export function usageLogEntry(request: GenerateRequest, edit: EditRequest | unde
       height: image.height,
       bytes: image.data.byteLength,
       responseId: image.responseId,
-      promptRevised: image.revisedPrompt === undefined ? undefined : image.revisedPrompt !== image.prompt,
       usage: image.usage,
     })),
   };
