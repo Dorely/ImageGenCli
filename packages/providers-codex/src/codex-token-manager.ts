@@ -49,7 +49,7 @@ export class CodexTokenManager {
     return this.refreshFrom(tokens.accessToken);
   }
 
-  // The Responses API rejected this access token before its recorded expiry.
+  // The Codex image endpoint rejected this access token before its recorded expiry.
   async recoverFromUnauthorized(rejectedAccessToken: string): Promise<string> {
     return this.refreshFrom(rejectedAccessToken);
   }
