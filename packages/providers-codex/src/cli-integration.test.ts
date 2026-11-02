@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@imagegencli/providers-google", () => ({ createGeminiEntry: () => ({ provider: { name: "gemini" }, authStatus: async () => ({ name: "gemini", configured: false }) }) }));
@@ -129,16 +130,29 @@ describe("CLI image requests", () => {
     const out = join(directory, "out.png");
     const fixture = Buffer.from(png, "base64");
     await writeFile(source, fixture);
-    await run([command, "--prompt", "Draw a blue bicycle", "--out", out, "--model", "gpt-image-2.5-sunburst", "--quality", "max", ...(command === "edit" ? ["--source", source, "--mask", source] : []), "--reference", source]);
+    await run([command, "--prompt", "Draw a blue bicycle", "--out", out, "--model", "gpt-image-2.5-sunburst", "--quality", "max", ...(command === "edit" ? ["--source", source] : []), "--reference", source]);
     expect(state.urls[0]).toBe("https://chatgpt.com/backend-api/codex/images/edits");
     expect(state.payloads[0]).toMatchObject({ prompt: "Draw a blue bicycle", model: "gpt-image-2.5-sunburst", background: "auto", quality: "max" });
     expect(state.payloads[0]["images"]).toHaveLength(command === "edit" ? 2 : 1);
-    expect(state.payloads[0]).not.toHaveProperty("mask");
     const result = JSON.parse(stdout);
     expect(result.imageModel).toBe("gpt-image-2.5-sunburst");
     expect(result.images[0].path).toBe(out);
     expect(await readFile(out)).toEqual(fixture);
     expect(result.images[0]).toEqual({ path: out, mimeType: "image/png", width: 1, height: 1, prompt: "Draw a blue bicycle", responseId: "gen-1" });
+    expect(stderr).toBe("");
+  });
+
+  it("sends an edit mask as the last image with the mask instruction", async () => {
+    const source = join(directory, "source.png");
+    const mask = join(directory, "mask.png");
+    const out = join(directory, "out.png");
+    await writeFile(source, Buffer.from(png, "base64"));
+    await writeFile(mask, await sharp({ create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer());
+    await run(["edit", "--prompt", "Make it blue", "--source", source, "--mask", mask, "--reference", source, "--out", out]);
+    expect(state.payloads[0]["images"]).toHaveLength(3);
+    expect(state.payloads[0]["prompt"]).toMatch(/^Make it blue\n\nThe last image is an edit mask/);
+    expect(state.payloads[0]).not.toHaveProperty("mask");
+    expect(JSON.parse(stdout).images[0].prompt).toBe("Make it blue");
     expect(stderr).toBe("");
   });
 

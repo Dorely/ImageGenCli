@@ -29,7 +29,7 @@ Both 2.5 models accept `--quality auto`, `low`, `medium`, `high`, `xhigh`, or `m
 
 ## Codex usage and what the backend honors
 
-Codex requests go directly to the Codex image endpoints. No text model runs, your prompt reaches the image model verbatim, and each image draws on the ChatGPT plan's separate daily image allowance, not the Codex 5-hour or weekly limits. Each `--count` image is a separate request.
+Codex requests go directly to the Codex image endpoints. No text model runs, your prompt reaches the image model verbatim (a `--mask` edit appends a fixed mask instruction), and each image draws on the ChatGPT plan's separate daily image allowance, not the Codex 5-hour or weekly limits. Each `--count` image is a separate request.
 
 The backend decides what it renders. As observed on a Plus account in October 2026:
 
@@ -39,7 +39,7 @@ The backend decides what it renders. As observed on a Plus account in October 20
 
 Treat `--quality`, `--size`, and `--model` as requests, not guarantees, and do not burn allowance retrying just to change them. Read `width` and `height` from the JSON result; crop or resize locally when exact dimensions matter. `IMAGEGEN_USAGE_LOG=<file>` records what was actually served and the allowance used percent.
 
-- **Mask:** Codex ignores `--mask`, which is accepted for compatibility with the shared CLI surface. Name the region to change and what to preserve in the prompt instead.
+- **Mask:** `--mask` takes a PNG the same size as the source, with the area to edit transparent and everything else opaque. The endpoint has no mask field, so Codex sends the mask as the last edit image and appends a fixed instruction to the prompt telling the model to change only the transparent area. This steers the edit reliably but is not pixel-exact: areas outside the mask can shift slightly. The mask uses one of the four edit-image slots, leaving room for two `--reference` images. Keep the prompt focused on the change itself.
 - **Format:** the endpoint returns PNG. JPEG and WebP are converted locally.
 - **Cost:** a low-quality opaque image costs roughly 450 image tokens. Each input image adds roughly 1,500 input tokens. Transparent output renders at medium quality and costs about two to four times as much, so request transparency only when the asset needs it.
 

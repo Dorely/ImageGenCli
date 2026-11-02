@@ -58,6 +58,40 @@ function buildBody(args: { prompt: string; model: string; size: ImageSize; quali
   return body;
 }
 
+const MASK_INSTRUCTION =
+  "The last image is an edit mask, not content to reproduce. Apply the requested change only where the mask is transparent. Keep every area where the mask is opaque exactly as it is in the first image.";
+
+// Transparent mask pixels mark the edit area. The mask is re-encoded as opaque
+// white with a transparent black edit area so it still reads if alpha is dropped.
+async function normalizeMask(mask: ImageInput, source: ImageInput): Promise<ImageInput> {
+  const usage = (message: string) => new ProviderError({ kind: "usage", message });
+  let pixels: Buffer;
+  let width: number;
+  let height: number;
+  let sourceWidth: number | undefined;
+  let sourceHeight: number | undefined;
+  try {
+    const decoded = await sharp(mask.data).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    ({ width, height } = decoded.info);
+    pixels = decoded.data;
+    ({ width: sourceWidth, height: sourceHeight } = await sharp(source.data).metadata());
+  } catch {
+    throw usage("Mask and source must be readable PNG, JPEG, or WebP images.");
+  }
+  if (width !== sourceWidth || height !== sourceHeight) {
+    throw usage(`Mask is ${width}x${height} but the source is ${sourceWidth}x${sourceHeight}; they must match.`);
+  }
+  let editable = false;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const edit = pixels[i + 3] < 128;
+    editable ||= edit;
+    pixels.fill(edit ? 0 : 255, i, i + 4);
+  }
+  if (!editable) throw usage("Mask has no transparent pixels; make the area to edit transparent.");
+  const data = await sharp(pixels, { raw: { width, height, channels: 4 } }).png().toBuffer();
+  return { data, contentType: "image/png" };
+}
+
 export class CodexImageProvider {
   readonly name = PROVIDER_NAME;
   readonly sizePolicy = { resolveSize: (size: string | undefined) => resolveSize(size) } satisfies ImageSizePolicy;
@@ -81,8 +115,15 @@ export class CodexImageProvider {
   }
 
   async edit(request: EditRequest): Promise<ProviderResult> {
-    // The images endpoint has no mask input: a mask is accepted and ignored.
-    return this.runAll(request, "edits", [request.sourceImage, ...(request.referenceImages ?? [])].slice(0, MAX_REFERENCE_IMAGES));
+    const images = [request.sourceImage, ...(request.referenceImages ?? [])];
+    if (!request.mask) return this.runAll(request, "edits", images.slice(0, MAX_REFERENCE_IMAGES));
+    // The images endpoint drops any mask field, so the mask travels as the last
+    // edit image and a fixed instruction tells the model how to read it.
+    if (images.length + 1 > MAX_REFERENCE_IMAGES) {
+      throw new ProviderError({ kind: "usage", message: `Codex accepts at most ${MAX_REFERENCE_IMAGES} edit images; a mask uses one, leaving room for ${MAX_REFERENCE_IMAGES - 2} --reference images.` });
+    }
+    const mask = await normalizeMask(request.mask, request.sourceImage);
+    return this.runAll(request, "edits", [...images, mask], `${request.prompt}\n\n${MASK_INSTRUCTION}`);
   }
 
   private resolveImageModel(request: GenerateRequest): string {
@@ -95,11 +136,11 @@ export class CodexImageProvider {
     return model;
   }
 
-  private async runAll(request: GenerateRequest, endpoint: ImageEndpoint, images: ImageInput[]): Promise<ProviderResult> {
+  private async runAll(request: GenerateRequest, endpoint: ImageEndpoint, images: ImageInput[], modelPrompt = request.prompt): Promise<ProviderResult> {
     const format = normalizeOutputFormat(request.format);
     const size = this.sizePolicy.resolveSize(request.size);
     const imageModel = this.resolveImageModel(request);
-    const body = JSON.stringify(buildBody({ prompt: request.prompt, model: imageModel, size, quality: request.quality ?? DEFAULT_QUALITY, images }));
+    const body = JSON.stringify(buildBody({ prompt: modelPrompt, model: imageModel, size, quality: request.quality ?? DEFAULT_QUALITY, images }));
     const results: ProviderResult["images"] = [];
     // The endpoint returns one image per call regardless of `n`.
     for (let i = 0, count = normalizeCount(request.count); i < count; i += 1) {

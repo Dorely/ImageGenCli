@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GenerateRequest } from "@imagegencli/core";
 import { CodexImageProvider, type CodexClientOptions } from "./codex-client.js";
@@ -87,16 +88,52 @@ describe("image inputs and options", () => {
     expect(payload().images).toEqual([{ image_url: "data:image/png;base64,AQID" }]);
   });
 
-  it("sends the source first, caps input images, and ignores the mask", async () => {
+  it("sends the source first and caps input images", async () => {
     const { provider, payload, url } = setup();
     const source = { data: new Uint8Array([9]), contentType: "image/jpeg" };
-    await provider.edit({ ...request, sourceImage: source, referenceImages: [input, input, input, input, input], mask: input, size: "1024x1024", quality: "high" });
+    await provider.edit({ ...request, sourceImage: source, referenceImages: [input, input, input, input, input], size: "1024x1024", quality: "high" });
     expect(url()).toBe("https://chatgpt.com/backend-api/codex/images/edits");
     expect(payload().images).toHaveLength(4);
     expect(payload().images[0]).toEqual({ image_url: "data:image/jpeg;base64,CQ==" });
-    expect(payload()).toMatchObject({ size: "1024x1024", quality: "high", background: "auto" });
-    expect(JSON.stringify(payload())).not.toMatch(/mask/);
+    expect(payload()).toMatchObject({ prompt: "Draw a bicycle", size: "1024x1024", quality: "high", background: "auto" });
   });
+});
+
+describe("edit masks", () => {
+  // 4x2 RGBA images; the mask's left half is transparent (the edit area).
+  const raster = async (alpha: (x: number) => number, width = 4) => {
+    const pixels = Buffer.alloc(width * 2 * 4, 128);
+    for (let i = 0; i < width * 2; i += 1) pixels[i * 4 + 3] = alpha(i % width);
+    return { data: new Uint8Array(await sharp(pixels, { raw: { width, height: 2, channels: 4 } }).png().toBuffer()), contentType: "image/png" };
+  };
+  const decode = async (dataUrl: string) => sharp(Buffer.from(dataUrl.split(",")[1], "base64")).ensureAlpha().raw().toBuffer();
+
+  it("appends a normalized mask last with an instruction and reports the caller's prompt", async () => {
+    const { provider, payload } = setup();
+    const source = await raster(() => 255);
+    const result = await provider.edit({ ...request, sourceImage: source, referenceImages: [input], mask: await raster((x) => (x < 2 ? 0 : 200)) });
+    const images = payload().images as { image_url: string }[];
+    expect(images).toHaveLength(3);
+    expect(images[1]).toEqual({ image_url: "data:image/png;base64,AQID" });
+    expect(Array.from((await decode(images[2].image_url)).subarray(0, 16))).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255]);
+    expect(payload().prompt).toBe("Draw a bicycle\n\nThe last image is an edit mask, not content to reproduce. Apply the requested change only where the mask is transparent. Keep every area where the mask is opaque exactly as it is in the first image.");
+    expect(result.images[0].prompt).toBe("Draw a bicycle");
+  });
+
+  it.each([
+    ["has no transparent pixels", async () => ({ sourceImage: await raster(() => 255), mask: await raster(() => 255) }), "no transparent pixels"],
+    ["differs in size from the source", async () => ({ sourceImage: await raster(() => 255, 3), mask: await raster(() => 0) }), "must match"],
+    ["is unreadable", async () => ({ sourceImage: await raster(() => 255), mask: input }), "readable"],
+    ["leaves too many edit images", async () => ({ sourceImage: await raster(() => 255), mask: await raster(() => 0), referenceImages: [input, input, input] }), "at most 4"],
+  ])("rejects a mask that %s before credentials or network", async (_label, build, message) => {
+    const { provider, fetchImpl, load } = setup();
+    await expect(provider.edit({ ...request, ...(await build()) })).rejects.toMatchObject({ kind: "usage", message: expect.stringContaining(message) });
+    expect(load).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("image outputs", () => {
 
   it.each(["png", "jpeg", "webp"])("makes one request per image and delivers %s", async (format) => {
     const { provider, fetchImpl } = setup();

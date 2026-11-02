@@ -90,8 +90,8 @@
 | `packages/providers-codex/src/token-store.ts` | Codex validation adapter over shared vault/file credential persistence. |
 | `packages/providers-codex/src/account-id.ts` | ChatGPT account-id extraction from the access JWT. |
 | `packages/providers-codex/src/account-id.test.ts` | Regression tests for account-id extraction. |
-| `packages/providers-codex/src/codex-client.ts` | Direct Codex images generations/edits provider (verbatim prompt, mask ignored, one refreshed retry on 401, local format conversion, served settings and usage). |
-| `packages/providers-codex/src/codex-client.test.ts` | Mock transport tests for model selection, quality, and edit inputs. |
+| `packages/providers-codex/src/codex-client.ts` | Direct Codex images generations/edits provider (verbatim prompt, mask sent as an instructed edit image, one refreshed retry on 401, local format conversion, served settings and usage). |
+| `packages/providers-codex/src/codex-client.test.ts` | Mock transport tests for model selection, quality, edit inputs, and mask normalization. |
 | `packages/providers-codex/src/cli-integration.test.ts` | CLI help, validation, request forwarding, and image file saving with mocked provider transport. |
 | `packages/providers-codex/src/codex-entry.ts` | Registry entry wiring the Codex provider and auth status. |
 | `packages/providers-codex/src/errors.ts` | Codex image-error classification and backend error-message extraction. |

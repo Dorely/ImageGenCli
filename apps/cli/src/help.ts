@@ -65,7 +65,10 @@ Use full model IDs; other provider-supported IDs may also be supplied.
 Model precedence: --model > constructor imageModel (library callers) >
 IMAGEGEN_CODEX_IMAGE_MODEL > gpt-image-2.5-flare.
 Codex may override the requested model, quality, and size; results report the
-returned dimensions. Codex ignores --mask; describe the region in the prompt.
+returned dimensions. A Codex --mask is sent as the last edit image with a fixed
+instruction appended to the prompt; it steers the edit but does not guarantee
+untouched pixels outside it. It must match the source size, and uses one of the
+four edit-image slots.
 IMAGEGEN_USAGE_LOG=<file> appends one prompt-free JSON usage line per result.
 
 Codex quality: auto (default), low, medium, high; Flare/Sunburst also support
@@ -81,7 +84,7 @@ const GENERATE_EXAMPLES = `Examples:
 
 const EDIT_EXAMPLES = `Edit options:
   --source <file>        Source image (required)
-  --mask <file>          Optional edit mask (openai-images; Codex ignores it)
+  --mask <file>          Optional edit mask; transparent pixels mark the area to edit
 
 Examples:
   imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp

@@ -93,7 +93,9 @@ Use full model IDs. Other provider-supported IDs remain accepted; actual account
 
 Quality defaults to `auto`. Requests go straight to the Codex image endpoints (`/backend-api/codex/images/generations` and `/edits`, the ones the Codex app's own image tool uses): no orchestration model runs, the prompt reaches the image model verbatim, and usage draws on the plan's separate daily image allowance rather than the 5-hour/weekly Codex limits.
 
-The backend decides what it actually renders. Observed on a Plus account (October 2026): it may serve a different quality (`low` regardless of the request) and size (about 1.57 MP at a varying aspect) than requested, and it accepts any `model` value without error. Read `width`/`height` from the JSON result; the usage log records what was served. The endpoint always returns PNG, so JPEG and WebP are converted locally. It has no mask input: `--mask` is accepted and ignored for Codex.
+The backend decides what it actually renders. Observed on a Plus account (October 2026): it may serve a different quality (`low` regardless of the request) and size (about 1.57 MP at a varying aspect) than requested, and it accepts any `model` value without error. Read `width`/`height` from the JSON result; the usage log records what was served. The endpoint always returns PNG, so JPEG and WebP are converted locally.
+
+The endpoint has no mask input, so a Codex `--mask` is sent as the last edit image and a fixed instruction is appended to the prompt: change only where the mask is transparent and keep the opaque area as in the source. This is the one case where the prompt is not sent verbatim; the JSON result still reports the caller's prompt. The mask must be a PNG matching the source dimensions, with the edit area transparent. It steers the edit to the masked region but is not pixel-exact outside it, and it uses one of the four edit-image slots.
 
 For native transparent assets, use a 2.5 model, PNG or WebP, and explicitly request real alpha transparency in the prompt. The Codex provider keeps `background` on `auto`; the CLI does not expose `--background`. Transparent output renders at medium quality and costs roughly two to four times the image tokens of an opaque low-quality image. Check the decoded alpha channel before accepting a cutout, and repeat the transparency requirement during later edits. See the [packaged skill](apps/cli/skill/SKILL.md) for examples and model guidance.
 
@@ -109,7 +111,7 @@ imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a produ
 - `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
 - `IMAGEGEN_USAGE_LOG` — optional file path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds the image request ID, image tokens (`imageGeneration`), the size/quality/background actually served (`served`), and the ChatGPT plan window reported with the response (`planLimits`: plan type, active limit, and daily image allowance used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
 
-The tool is a passthrough: prompts and reference images come from the caller verbatim; the CLI adds no prompt content of its own.
+The tool is a passthrough: prompts and reference images come from the caller verbatim; the CLI adds no prompt content of its own, except the fixed mask instruction for a Codex `--mask` edit.
 
 ## Architecture
 
