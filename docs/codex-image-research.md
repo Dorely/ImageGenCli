@@ -31,7 +31,7 @@ Leaving `model` out of the request also returns an image, so the backend does ch
 | `output_format` set to an invalid value | 200, PNG, so the value is not validated |
 | `output_format: "gif"` | 400, "GIF output is not enabled for this request." |
 
-The response has no model field, and its C2PA manifest records only `gpt-image`. So these tests show that the endpoint produces real alpha, but not that a 2.6 model rendered it. Token counts point the same way, weakly: a third-party [pricing summary](https://www.eesel.ai/blog/chatgpt-images-2-6-pricing) reports 823 low-quality tokens for 2.6 at 1024x1024, while this larger low-quality output used 343.
+The response has no model field, and its C2PA manifest records only `gpt-image`. So these tests show that the endpoint produces real alpha, but not that a 2.6 model rendered it. Token counts point the same way, weakly: named 2.6 models on OpenRouter used 824 tokens for a low-quality 1024x1024 transparent image (see below), while a larger low-quality Codex output used 343.
 
 ## 2.6 claims
 
@@ -41,6 +41,19 @@ The response has no model field, and its C2PA manifest records only `gpt-image`.
 | SVG export | Documented for the public API, not delivered here. |
 | GIF output | Documented for the public API, rejected here. |
 | Faster generation | Not testable without a confirmed model. Requests took 11-29 seconds. |
+
+## OpenRouter comparison
+
+Tested 2026-11-06 with raw `POST /api/v1/images` requests at `quality: low`, one request per case, because the CLI has no GIF or `background` option. OpenRouter charged $30 per million image tokens for both models.
+
+| Request | Flare | Sunburst | Result |
+|---|---|---|---|
+| `output_format: "svg"` | 400 | 400 | "OpenAI: output_format: not supported. Accepted: png, jpeg, webp, gif". OpenRouter's routing filter rejected it in about 0.2 seconds, with no usage reported. |
+| `output_format: "gif"`, 4 frames at 200 ms, 1:1 | 13 s | 22 s | Animated, looping 960x960 GIF with real motion. 1,260 image tokens, $0.038. |
+| `background: "transparent"`, PNG, 1:1 | 7 s | 18 s | 1024x1024, 25-37% fully clear, clean cutout. 824 image tokens, $0.025. |
+| `background: "transparent"`, GIF, 4 frames | 16 s | Not run | About 93% clear in every frame, with on/off alpha only. $0.038. |
+
+The rejected SVG request does not settle what OpenAI's own API does, because it never reached OpenAI and no OpenAI API key was available to test directly. The CLI on OpenRouter also produced real alpha from the prompt alone at 1024x1024 (32% fully clear, subject alpha 250-254), but rejected `--format gif` before sending a request. Timings are single samples. Both models reported identical tokens and prices, so they differ in speed and output rather than cost.
 
 ## Known conflict
 
