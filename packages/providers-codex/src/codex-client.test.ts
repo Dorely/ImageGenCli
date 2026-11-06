@@ -36,7 +36,7 @@ afterEach(() => vi.unstubAllEnvs());
 describe("image model selection", () => {
   it("defaults to Flare with the prompt verbatim and auto options omitted", async () => {
     const { provider, payload, url } = setup();
-    expect((await provider.generate(request)).imageModel).toBe(models[0]);
+    expect((await provider.generate(request)).requestedModel).toBe(models[0]);
     expect(url()).toBe("https://chatgpt.com/backend-api/codex/images/generations");
     expect(payload()).toEqual({ prompt: "Draw a bicycle", model: models[0], size: expect.stringMatching(/^\d+x\d+$/), background: "auto" });
   });
@@ -44,7 +44,7 @@ describe("image model selection", () => {
   it.each(models)("selects %s for generation and editing", async (model) => {
     const { provider, payload } = setup();
     for (const result of [await provider.generate({ ...request, model }), await provider.edit({ ...request, model, sourceImage: input })]) {
-      expect(result.imageModel).toBe(model);
+      expect(result.requestedModel).toBe(model);
     }
     expect(payload().model).toBe(model);
     expect(payload(1).model).toBe(model);
@@ -52,11 +52,26 @@ describe("image model selection", () => {
 
   it("prioritizes request, constructor, environment, then default without leaking overrides", async () => {
     vi.stubEnv("IMAGEGEN_CODEX_IMAGE_MODEL", models[2]);
-    expect((await setup().provider.generate(request)).imageModel).toBe(models[2]);
+    expect((await setup().provider.generate(request)).requestedModel).toBe(models[2]);
     const { provider } = setup({ imageModel: models[1] });
-    expect((await provider.generate({ ...request, model: models[0] })).imageModel).toBe(models[0]);
-    expect((await provider.generate(request)).imageModel).toBe(models[1]);
-    expect((await provider.generate({ ...request, model: "custom-model" })).imageModel).toBe("custom-model");
+    expect((await provider.generate({ ...request, model: models[0] })).requestedModel).toBe(models[0]);
+    expect((await provider.generate(request)).requestedModel).toBe(models[1]);
+    expect((await provider.generate({ ...request, model: "custom-model" })).requestedModel).toBe("custom-model");
+  });
+
+  it("reports a served model only when the backend names one", async () => {
+    const { provider, fetchImpl } = setup();
+    expect((await provider.generate(request)).images[0].servedModel).toBeUndefined();
+    fetchImpl.mockResolvedValue(new Response(JSON.stringify({ model: "gpt-image-2-codex", data: [{ b64_json: png }], size: "1024x1024", quality: "low", background: "opaque" })));
+    expect((await provider.generate(request)).images[0].servedModel).toBe("gpt-image-2-codex");
+  });
+
+  it.each(["gif", "svg", "bmp"])("rejects format %s before credentials or network", async (format) => {
+    const { provider, fetchImpl, load } = setup();
+    await expect(provider.generate({ ...request, format })).rejects.toMatchObject({ kind: "usage", message: "Output format must be png, jpeg, or webp." });
+    await expect(provider.edit({ ...request, format, sourceImage: input })).rejects.toMatchObject({ kind: "usage" });
+    expect(load).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it.each(["", "   "])("rejects blank request models before credentials or network", async (model) => {

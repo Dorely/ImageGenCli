@@ -25,7 +25,7 @@
 | File | Description |
 |------|-------------|
 | `docs/releasing.md` | Local Windows release, version/tag, and npm + GitHub publish workflow. |
-| `docs/codex-image-research.md` | Dated GPT Image 2.6 research and live Codex endpoint findings behind the pinned default. |
+| `docs/codex-image-research.md` | Dated GPT Image 2.6 research and live Codex and OpenRouter findings, including what Codex serves. |
 
 ## Release Scripts
 

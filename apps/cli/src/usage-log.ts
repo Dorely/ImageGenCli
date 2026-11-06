@@ -11,7 +11,7 @@ export function usageLogEntry(request: GenerateRequest, edit: EditRequest | unde
     timestamp: new Date().toISOString(),
     command: edit ? "edit" : "generate",
     provider: result.provider,
-    imageModel: result.imageModel,
+    requestedModel: result.requestedModel,
     requested: {
       size: request.size ?? "auto",
       quality: request.quality ?? "auto",
@@ -26,6 +26,7 @@ export function usageLogEntry(request: GenerateRequest, edit: EditRequest | unde
       height: image.height,
       bytes: image.data.byteLength,
       responseId: image.responseId,
+      servedModel: image.servedModel ?? null,
       usage: image.usage,
     })),
   };

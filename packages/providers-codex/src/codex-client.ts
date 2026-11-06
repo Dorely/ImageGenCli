@@ -139,14 +139,14 @@ export class CodexImageProvider {
   private async runAll(request: GenerateRequest, endpoint: ImageEndpoint, images: ImageInput[], modelPrompt = request.prompt): Promise<ProviderResult> {
     const format = normalizeOutputFormat(request.format);
     const size = this.sizePolicy.resolveSize(request.size);
-    const imageModel = this.resolveImageModel(request);
-    const body = JSON.stringify(buildBody({ prompt: modelPrompt, model: imageModel, size, quality: request.quality ?? DEFAULT_QUALITY, images }));
+    const requestedModel = this.resolveImageModel(request);
+    const body = JSON.stringify(buildBody({ prompt: modelPrompt, model: requestedModel, size, quality: request.quality ?? DEFAULT_QUALITY, images }));
     const results: ProviderResult["images"] = [];
     // The endpoint returns one image per call regardless of `n`.
     for (let i = 0, count = normalizeCount(request.count); i < count; i += 1) {
       results.push(await this.sendOnce(endpoint, body, format, request.prompt));
     }
-    return { provider: this.name, imageModel, images: results };
+    return { provider: this.name, requestedModel, images: results };
   }
 
   private async sendOnce(endpoint: ImageEndpoint, body: string, format: OutputFormat, prompt: string): Promise<ProviderResult["images"][number]> {
@@ -207,6 +207,8 @@ export class CodexImageProvider {
       height,
       prompt,
       responseId: typeof item["generation_id"] === "string" ? item["generation_id"] : undefined,
+      // The endpoint accepts any requested model and currently names none in its response.
+      servedModel: typeof payload["model"] === "string" ? payload["model"] : undefined,
       usage: {
         requestId,
         imageGeneration: payload["usage"],

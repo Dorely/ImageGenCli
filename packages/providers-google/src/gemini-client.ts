@@ -73,13 +73,6 @@ export class GeminiImageProvider {
     const count = request.count ?? 1;
     if (!Number.isInteger(count) || count < 1 || count > 4)
       throw error("usage", "Image count must be from 1 to 4.");
-    if (
-      request.format &&
-      !["png", "jpeg", "jpg", "webp"].includes(
-        request.format.trim().toLowerCase(),
-      )
-    )
-      throw error("usage", "Output format must be png, jpeg, or webp.");
     const format = normalizeOutputFormat(request.format);
     const size = resolveGeminiSize(request.size, model);
     const payload = {
@@ -120,7 +113,7 @@ export class GeminiImageProvider {
     const images: ProviderResult["images"] = [];
     for (let i = 0; i < count; i++)
       images.push(await this.send(payload, key, format, request.prompt));
-    return { provider: this.name, imageModel: model, images };
+    return { provider: this.name, requestedModel: model, images };
   }
   private async send(
     payload: unknown,

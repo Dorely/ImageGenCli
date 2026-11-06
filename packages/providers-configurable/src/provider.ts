@@ -264,7 +264,7 @@ export class ConfigurableImageProvider implements IImageProvider {
           }
         }),
       );
-    return { provider: this.name, imageModel: model, images: results };
+    return { provider: this.name, requestedModel: model, images: results };
   }
 }
 export function createProfileEntry(profile: EndpointProfile): ProviderEntry {

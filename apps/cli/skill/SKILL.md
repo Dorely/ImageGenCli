@@ -11,13 +11,15 @@ Use the installed `imagegen` command to turn the user's prompt into image files.
 2. Run `imagegen providers` to see which provider is configured. If none is configured, have the user run `imagegen auth codex login` for browser OAuth or `imagegen auth gemini login` for hidden API-key entry. Named API profiles use `imagegen auth <name> login`; see the endpoint guidance below. Credentials use the OS vault with a file fallback. Do not ask the user to paste keys into chat or put them in shell arguments; scripted setup can use explicit `--key-stdin` from an existing secure input source.
 3. For a new image, run `imagegen generate --prompt "<user's image brief>" --out <output-path>`. For an edit, run `imagegen edit --source <existing-image> --prompt "<requested change>" --out <output-path>`. Use repeatable `--reference <file>` for visual references or continuity. Preserve the user's requested format, size, count, and output location using the corresponding CLI options.
 4. Read `imagegen help generate` or `imagegen help edit` for current option details when needed. Follow the model and transparency guidance below. If several providers are configured, select one with `--provider`.
-5. Parse the JSON result and use each `images[].path` as the generated file location. Check that the file exists and inspect the result against the brief before showing or referencing it. `imageModel` reports the requested model, not proof of what rendered; successful JSON does not certify image quality or transparency. If the command fails, report the CLI error and the action needed to resolve it.
+5. Parse the JSON result and use each `images[].path` as the generated file location. Check that the file exists and inspect the result against the brief before showing or referencing it. `requestedModel` is only what was asked for; `images[].servedModel` is the model the provider named, or null when it named none. Successful JSON does not certify image quality or transparency. If the command fails, report the CLI error and the action needed to resolve it.
 
 The CLI emits JSON by default. Keep its output machine-readable when calling it from scripts.
 
 ## Model and quality selection
 
-Respect an explicit model choice. Otherwise use the configured model for ordinary work; the Codex default is `gpt-image-2.6-flare`, a pinned ID updated with CLI releases. For native transparent assets using Codex, select `--provider codex` and a 2.6 Flare or Sunburst model explicitly so a configuration override cannot silently select an older model.
+Respect an explicit model choice. Otherwise use the configured model for ordinary work; Codex requests `gpt-image-2.6-flare` by default, but the backend does not honor model requests (see below). When a specific model really matters, use a route that honors it, such as an OpenRouter profile with `openai/gpt-image-2.6-flare`, and tell the user that route is pay-as-you-go. Do not tell the user a Codex image came from a 2.6 model.
+
+This guidance applies on routes that honor the model ID:
 
 | Image model | Use |
 |---|---|
@@ -26,7 +28,7 @@ Respect an explicit model choice. Otherwise use the configured model for ordinar
 | `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst` | Existing workflows or an explicit user choice. |
 | `gpt-image-2` | Existing workflows or an explicit user choice; quality supports up to `high`. |
 
-OpenAI's guidance is to test Flare first when moving from `gpt-image-2` or 2.5 Flare, and Sunburst first when moving from 2.5 Sunburst. If Sunburst meets the need, also try Flare with the same prompt and compare. On Codex, this choice may have no effect; see below.
+OpenAI's guidance is to test Flare first when moving from `gpt-image-2` or 2.5 Flare, and Sunburst first when moving from 2.5 Sunburst. If Sunburst meets the need, also try Flare with the same prompt and compare. On Codex, this choice has no known effect; see below.
 
 The Flare and Sunburst models accept `--quality auto`, `low`, `medium`, `high`, `xhigh`, or `max`. Keep `auto` unless the task calls for a specific setting. Availability depends on the connected account; do not silently substitute a model after a provider error. Do not invent additional flags from API examples.
 
@@ -38,12 +40,12 @@ The backend decides what it renders. As observed on a Plus account in November 2
 
 - **Quality:** it ignored the request. One prompt served `medium` whether `low`, `max`, or nothing was requested. A very simple prompt served `low`, and transparent output served `medium`.
 - **Size:** it returned about 1.57 MP at an aspect of its choosing (for example 1536x1024 or 2172x724), even when `--size` asked for 1024x1024 or 1024x1536.
-- **Model:** it accepted every value, including a made-up ID, and the response never names the model used. Nothing shows that `--model` changes the render or that a 2.6 model ran, so do not promise Flare or Sunburst differences to the user on this route.
+- **Model:** it accepted every value, including a made-up ID, and the response never names the model used, so `servedModel` is null. The Codex Responses route rewrote 2.6 requests to `gpt-image-2-codex` on the same login, which is the best available evidence of what runs here. Do not promise Flare or Sunburst differences to the user on this route.
 
-Treat `--quality`, `--size`, and `--model` as requests, not guarantees, and do not burn allowance retrying just to change them. Read `width` and `height` from the JSON result; crop or resize locally when exact dimensions matter. `IMAGEGEN_USAGE_LOG=<file>` records what was actually served and the allowance used percent.
+Treat `--quality`, `--size`, and `--model` as requests, not guarantees, and do not burn allowance retrying just to change them. Read `width`, `height`, and `served` (the quality, size, and background Codex reports) from the JSON result; crop or resize locally when exact dimensions matter. `IMAGEGEN_USAGE_LOG=<file>` also records tokens and the allowance used percent.
 
 - **Mask:** `--mask` takes a PNG the same size as the source, with the area to edit transparent and everything else opaque. The endpoint has no mask field, so Codex sends the mask as the last edit image and appends a fixed instruction to the prompt telling the model to change only the transparent area. The mask is targeting guidance, not a whitelist of pixels the model may change: the model can and will adjust areas outside it when the edit calls for it, such as lighting, shadows, or reflections. Never composite the output back onto the source to restore pixels outside the mask; that breaks those coherent changes and leaves seams. Use the returned image as is. The mask uses one of the four edit-image slots, leaving room for two `--reference` images. Keep the prompt focused on the change itself.
-- **Format:** the endpoint returns PNG. JPEG and WebP are converted locally. OpenAI announced SVG and GIF output for 2.6, but they are not available through this CLI: Codex returned a PNG for an SVG request and rejected a GIF request as not enabled, and the CLI has no way to request them. With `--provider codex`, `--format gif` or `--format svg` silently produces a PNG saved with `.png` added to the name (`out.gif` becomes `out.gif.png`), so check `mimeType` in the result. If the user needs vector or animated output, say so rather than renaming a raster. The public API's `complexity`, `frame_count`, and similar parameters are not CLI flags.
+- **Format:** the endpoint returns PNG. JPEG and WebP are converted locally. OpenAI announced SVG and GIF output for 2.6, but they are not available through this CLI: Codex returned a PNG for an SVG request and rejected a GIF request as not enabled, and the CLI rejects `--format gif` and `--format svg` before sending a request. If the user needs vector or animated output, say so rather than renaming a raster. The public API's `complexity`, `frame_count`, and similar parameters are not CLI flags.
 - **Cost:** an opaque image costs roughly 340 image tokens at low quality and 600 at medium. Each input image adds roughly 1,500 input tokens. Transparent output renders at medium quality and costs about 1,370, two to four times as much, so request transparency only when the asset needs it.
 
 ## Native transparency with Codex
@@ -59,9 +61,9 @@ The Codex provider sends `background: auto` and the CLI has **no `--background` 
 - If an output is opaque, make a focused native edit to remove the unwanted backdrop and recheck. Report a persistent failure; use another removal method only when the task calls for it or native attempts fail, and disclose it. Preserve alpha during resizing, cropping, and export.
 
 ```sh
-imagegen generate --provider codex --model gpt-image-2.6-flare --format png --size 1024x1024 --prompt "A single game inventory icon of a copper key, centered with padding. Real alpha transparency outside the key, clean edges. No scenery, floor, shadow, solid backdrop, or painted checkerboard." --out ./key.png
-imagegen edit --provider codex --model gpt-image-2.6-sunburst --format png --source ./product.png --prompt "Isolate the bottle on an empty alpha background with real transparency. Preserve its shape, colors, and exact label. Remove the backdrop and cast shadow; keep clean edges and transparent padding." --out ./bottle-cutout.png
-imagegen edit --provider codex --model gpt-image-2.6-flare --format png --source ./key.png --prompt "Change only the copper key to silver. Preserve geometry, framing, padding, and the transparent alpha background. Add no backdrop or shadow." --out ./silver-key.png
+imagegen generate --provider codex --format png --prompt "A single game inventory icon of a copper key, centered with padding. Real alpha transparency outside the key, clean edges. No scenery, floor, shadow, solid backdrop, or painted checkerboard." --out ./key.png
+imagegen edit --provider codex --format png --source ./product.png --prompt "Isolate the bottle on an empty alpha background with real transparency. Preserve its shape, colors, and exact label. Remove the backdrop and cast shadow; keep clean edges and transparent padding." --out ./bottle-cutout.png
+imagegen edit --provider codex --format png --source ./key.png --prompt "Change only the copper key to silver. Preserve geometry, framing, padding, and the transparent alpha background. Add no backdrop or shadow." --out ./silver-key.png
 ```
 
 ## Briefs, references, and sizing

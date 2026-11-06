@@ -13,10 +13,13 @@ describe("normalizeOutputFormat", () => {
     expect(normalizeOutputFormat("png")).toBe("png");
   });
 
-  it("falls back to png for missing or unknown values", () => {
+  it("defaults missing values to png", () => {
     expect(normalizeOutputFormat(undefined)).toBe("png");
     expect(normalizeOutputFormat("")).toBe("png");
-    expect(normalizeOutputFormat("bmp")).toBe("png");
+  });
+
+  it.each(["gif", "svg", "bmp"])("rejects %s", (format) => {
+    expect(() => normalizeOutputFormat(format)).toThrowError(expect.objectContaining({ kind: "usage" }));
   });
 });
 

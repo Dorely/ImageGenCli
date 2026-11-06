@@ -29,14 +29,17 @@ export interface GeneratedImage {
   height: number;
   prompt: string;
   responseId?: string;
-  // Provider-reported metering for this image (tokens, plan limits). JSON-safe,
-  // provider-specific shape; never contains credentials or prompts.
+  // The model the provider says rendered this image, when it reports one.
+  servedModel?: string;
+  // Provider-reported metering for this image (tokens, plan limits). A `served`
+  // entry, when present, is what the provider says it rendered and is shown in
+  // results. JSON-safe, provider-specific shape; never contains credentials or prompts.
   usage?: Record<string, unknown>;
 }
 
 export interface ProviderResult {
   provider: string;
-  imageModel: string;
+  requestedModel: string;
   images: GeneratedImage[];
 }
 

@@ -41,7 +41,7 @@ The CLI layer stays thin: argument parsing, validation, and result reporting. Al
 ## Phase 1: Codex (OpenAI GPT Image)
 
 - Authenticate with Codex OAuth (PKCE flow), following the auth and calling patterns established in the Lorekeeper repo.
-- Generate and edit images through the Codex image endpoints, defaulting to `gpt-image-2.6-flare`, with optional model selection for `gpt-image-2.6-sunburst`, the 2.5 models, `gpt-image-2`, or other provider-supported models.
+- Generate and edit images through the Codex image endpoints, requesting `gpt-image-2.6-flare` by default or another ID with `--model`, and reporting honestly that the backend chooses what runs.
 - Support the portable core options: prompt, size, quality, output format, and count.
 - Write image files to explicit output paths and report machine-readable results.
 

@@ -135,10 +135,10 @@ describe("CLI image requests", () => {
     expect(state.payloads[0]).toMatchObject({ prompt: "Draw a blue bicycle", model: "gpt-image-2.6-sunburst", background: "auto", quality: "max" });
     expect(state.payloads[0]["images"]).toHaveLength(command === "edit" ? 2 : 1);
     const result = JSON.parse(stdout);
-    expect(result.imageModel).toBe("gpt-image-2.6-sunburst");
+    expect(result.requestedModel).toBe("gpt-image-2.6-sunburst");
     expect(result.images[0].path).toBe(out);
     expect(await readFile(out)).toEqual(fixture);
-    expect(result.images[0]).toEqual({ path: out, mimeType: "image/png", width: 1, height: 1, prompt: "Draw a blue bicycle", responseId: "gen-1" });
+    expect(result.images[0]).toEqual({ path: out, mimeType: "image/png", width: 1, height: 1, prompt: "Draw a blue bicycle", responseId: "gen-1", servedModel: null, served: { size: "1024x1024", quality: "low", background: "opaque" } });
     expect(stderr).toBe("");
   });
 

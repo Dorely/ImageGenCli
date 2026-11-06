@@ -208,7 +208,7 @@ function printResult(providerName: string, result: ProviderResult, paths: string
   process.stdout.write(
     `${JSON.stringify({
       provider: providerName,
-      imageModel: result.imageModel,
+      requestedModel: result.requestedModel,
       images: result.images.map((image, i) => ({
         path: paths[i],
         mimeType: image.mimeType,
@@ -216,6 +216,8 @@ function printResult(providerName: string, result: ProviderResult, paths: string
         height: image.height,
         prompt: image.prompt,
         responseId: image.responseId,
+        servedModel: image.servedModel ?? null,
+        served: image.usage?.["served"],
       })),
     })}\n`,
   );

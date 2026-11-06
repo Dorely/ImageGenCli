@@ -33,6 +33,21 @@ Leaving `model` out of the request also returns an image, so the backend does ch
 
 The response has no model field, and its C2PA manifest records only `gpt-image`. So these tests show that the endpoint produces real alpha, but not that a 2.6 model rendered it. Token counts point the same way, weakly: named 2.6 models on OpenRouter used 824 tokens for a low-quality 1024x1024 transparent image (see below), while a larger low-quality Codex output used 343.
 
+## What Codex serves
+
+Tested 2026-11-06 on the same login, through `POST /backend-api/codex/responses` with the hosted `image_generation` tool, a `gpt-6-luna` carrier, and one request per row. This route needs no sentinel token, but it runs a text model too (about 2,400 tokens here), and it is not the route the CLI uses.
+
+| Tool settings | Result |
+|---|---|
+| `gpt-image-2.6-flare`, GIF, 4 frames | 400: "GIF output is not enabled for the model 'gpt-image-2-codex'." |
+| `gpt-image-2.6-sunburst`, PNG, `low`, 1024x1024 | 200, tool settings returned as `gpt-image-2-codex`, `quality: auto`, `size: auto`, 515 image tokens |
+
+The `/images` route names no model, so this is strong evidence for it rather than proof. The name also does not establish the underlying weights. [openai/codex#59890](https://github.com/openai/codex/issues/59890), [#59180](https://github.com/openai/codex/issues/59180), and [#28723](https://github.com/openai/codex/issues/28723) report the same rewrite on other accounts.
+
+The CLI therefore reports `requestedModel`, and `servedModel` only if the response names one, so it will pick up a model field if OpenAI adds it. The default stays a 2.6 request so that it can take effect if the route starts honoring it. Check this route again when those issues change.
+
+The ChatGPT conversation route described in #59890 was not tried or adopted. It requires sentinel chat-requirements tokens, an anti-bot gate that a CLI should not bypass, and per that teardown the client cannot select the model or request GIF there anyway.
+
 ## 2.6 claims
 
 | Claim | Status on the Codex route |

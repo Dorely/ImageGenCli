@@ -20,7 +20,7 @@ vi.mock("@imagegencli/providers-codex", async (importOriginal) => {
       provider: {
         name: "codex",
         generate: async () => ({
-          imageModel: "test-codex",
+          requestedModel: "test-codex",
           images: [
             {
               data: await sharp({

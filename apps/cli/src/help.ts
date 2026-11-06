@@ -56,32 +56,34 @@ Gemini provider:
   Model precedence: --model > constructor imageModel > IMAGEGEN_GEMINI_IMAGE_MODEL
   > gemini-nano-banana-2.1. Calls are independent; use prior output as --source.
 
-Supported Codex models (account availability is determined by the provider):
-  gpt-image-2.6-flare     Default; fast image generation and editing
-  gpt-image-2.6-sunburst  Higher-precision image generation and editing
-  gpt-image-2.5-flare     Previous Flare; retained for compatibility
-  gpt-image-2.5-sunburst  Previous Sunburst; retained for compatibility
-  gpt-image-2            Older model; retained for compatibility
+Codex model requests (the backend chooses what actually runs):
+  gpt-image-2.6-flare     Requested by default
+  gpt-image-2.6-sunburst  Requested with --model
+  gpt-image-2.5-flare     Requested with --model
+  gpt-image-2.5-sunburst  Requested with --model
+  gpt-image-2            Requested with --model
 
-Use full model IDs; other provider-supported IDs may also be supplied.
+Codex accepts any model ID, including made-up ones, and does not report what ran;
+its Responses route rewrites these requests to gpt-image-2-codex. Use a named
+profile such as OpenRouter when a specific model matters.
 Model precedence: --model > constructor imageModel (library callers) >
 IMAGEGEN_CODEX_IMAGE_MODEL > gpt-image-2.6-flare.
-Codex may override the requested model, quality, and size; imageModel reports the
-requested model, and results report the returned dimensions. A Codex --mask is sent as the last edit image with a fixed
+JSON results report requestedModel, and servedModel per image (null unless the
+provider names one). Codex also reports served quality, size, and background, and
+may override what was requested. A Codex --mask is sent as the last edit image with a fixed
 instruction appended to the prompt; it steers the edit but does not guarantee
 untouched pixels outside it. It must match the source size, and uses one of the
 four edit-image slots.
 IMAGEGEN_USAGE_LOG=<file> appends one prompt-free JSON usage line per result.
 
-Codex quality: auto (default), low, medium, high; Flare/Sunburst also support
-xhigh and max. gpt-image-2 rejects xhigh/max.
+Codex quality requests: auto (default), low, medium, high; Flare/Sunburst IDs also
+accept xhigh and max. gpt-image-2 rejects xhigh/max. The backend may serve another.
 `;
 
 const GENERATE_EXAMPLES = `Examples:
   imagegen generate --provider gemini --size 16:9 --prompt "a lighthouse at dawn" --out ./gemini.png
   imagegen generate --prompt "a lighthouse at dawn" --out ./lighthouse.png
-  imagegen generate --model gpt-image-2 --prompt "a lighthouse" --out ./classic.png
-  imagegen generate --model gpt-image-2.6-sunburst --quality max --prompt "a product photo" --out ./product.png
+  imagegen generate --provider openrouter --model openai/gpt-image-2.6-sunburst --quality high --prompt "a product photo" --out ./product.png
 `;
 
 const EDIT_EXAMPLES = `Edit options:
@@ -90,7 +92,7 @@ const EDIT_EXAMPLES = `Edit options:
 
 Examples:
   imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp
-  imagegen edit --model gpt-image-2.6-sunburst --quality max --source ./product.png --prompt "add a ribbon" --out ./ribbon.png
+  imagegen edit --provider openrouter --model openai/gpt-image-2.6-sunburst --source ./product.png --prompt "add a ribbon" --out ./ribbon.png
 `;
 
 export const USAGE = `imagegen - provider-agnostic image generation CLI
