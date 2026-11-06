@@ -77,7 +77,7 @@ async function run(args: string[]) {
 describe("CLI help", () => {
   it.each([[], ["help"], ["--help"], ["help", "generate"], ["generate", "--help"], ["help", "edit"], ["edit", "--help"]])("documents models and quality usage for %j", async (...args) => {
     await run(args);
-    for (const text of ["gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "--model", "xhigh and max", "IMAGEGEN_CODEX_IMAGE_MODEL", "Examples:"]) {
+    for (const text of ["gpt-image-2.6-flare", "gpt-image-2.6-sunburst", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "--model", "xhigh and max", "IMAGEGEN_CODEX_IMAGE_MODEL", "Examples:"]) {
       expect(stdout).toContain(text);
     }
     expect(state.payloads).toHaveLength(0);
@@ -130,12 +130,12 @@ describe("CLI image requests", () => {
     const out = join(directory, "out.png");
     const fixture = Buffer.from(png, "base64");
     await writeFile(source, fixture);
-    await run([command, "--prompt", "Draw a blue bicycle", "--out", out, "--model", "gpt-image-2.5-sunburst", "--quality", "max", ...(command === "edit" ? ["--source", source] : []), "--reference", source]);
+    await run([command, "--prompt", "Draw a blue bicycle", "--out", out, "--model", "gpt-image-2.6-sunburst", "--quality", "max", ...(command === "edit" ? ["--source", source] : []), "--reference", source]);
     expect(state.urls[0]).toBe("https://chatgpt.com/backend-api/codex/images/edits");
-    expect(state.payloads[0]).toMatchObject({ prompt: "Draw a blue bicycle", model: "gpt-image-2.5-sunburst", background: "auto", quality: "max" });
+    expect(state.payloads[0]).toMatchObject({ prompt: "Draw a blue bicycle", model: "gpt-image-2.6-sunburst", background: "auto", quality: "max" });
     expect(state.payloads[0]["images"]).toHaveLength(command === "edit" ? 2 : 1);
     const result = JSON.parse(stdout);
-    expect(result.imageModel).toBe("gpt-image-2.5-sunburst");
+    expect(result.imageModel).toBe("gpt-image-2.6-sunburst");
     expect(result.images[0].path).toBe(out);
     expect(await readFile(out)).toEqual(fixture);
     expect(result.images[0]).toEqual({ path: out, mimeType: "image/png", width: 1, height: 1, prompt: "Draw a blue bicycle", responseId: "gen-1" });

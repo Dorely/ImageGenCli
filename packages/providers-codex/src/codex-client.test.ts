@@ -4,7 +4,7 @@ import type { GenerateRequest } from "@imagegencli/core";
 import { CodexImageProvider, type CodexClientOptions } from "./codex-client.js";
 import { CodexTokenManager } from "./codex-token-manager.js";
 
-const models = ["gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2"];
+const models = ["gpt-image-2.6-flare", "gpt-image-2.6-sunburst", "gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst"];
 const input = { data: new Uint8Array([1, 2, 3]), contentType: "image/png" };
 const request: GenerateRequest = { prompt: "Draw a bicycle", out: "unused.png" };
 // A one-pixel PNG fixture.
@@ -68,8 +68,8 @@ describe("image model selection", () => {
 
   it("surfaces model errors with backend detail and no fallback", async () => {
     const { provider, fetchImpl } = setup();
-    fetchImpl.mockResolvedValue(new Response(JSON.stringify({ error: { message: "invalid_value for gpt-image-2.5-flare" } }), { status: 400 }));
-    await expect(provider.generate(request)).rejects.toMatchObject({ statusCode: 400, kind: "image_model_invalid", message: expect.stringContaining("invalid_value for gpt-image-2.5-flare") });
+    fetchImpl.mockResolvedValue(new Response(JSON.stringify({ error: { message: "invalid_value for gpt-image-2.6-flare" } }), { status: 400 }));
+    await expect(provider.generate(request)).rejects.toMatchObject({ statusCode: 400, kind: "image_model_invalid", message: expect.stringContaining("invalid_value for gpt-image-2.6-flare") });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
@@ -164,7 +164,7 @@ describe("image outputs", () => {
   });
 
   it.each(["xhigh", "max"])("allows %s on new models and rejects it on gpt-image-2", async (quality) => {
-    for (const model of models.slice(0, 2)) {
+    for (const model of models.filter((id) => id !== models[2])) {
       const { provider, payload } = setup();
       await provider.generate({ ...request, model, quality });
       expect(payload().quality).toBe(quality);

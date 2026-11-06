@@ -6,7 +6,7 @@ ImageGenCli is a provider-agnostic command-line tool for programmatic image gene
 
 ## Current Status
 
-- Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex image endpoints (default `gpt-image-2.5-flare`, with Sunburst and `gpt-image-2` selectable).
+- Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex image endpoints (default `gpt-image-2.6-flare`, with Sunburst, the 2.5 models, and `gpt-image-2` selectable).
 - Named API profiles implemented: OpenRouter and OpenAI Images-compatible endpoints, stored-key auth, explicit model discovery, and upstream quota diagnostics.
 - Gemini provider implemented: stored API key, stateless Interactions API generation, references, independent edits, native-size normalization, and PNG/JPEG/WebP delivery.
 
@@ -85,29 +85,30 @@ Both `generate` and `edit` accept `--model <id>`. Run `imagegen help`, `imagegen
 
 | Supported Codex model | Purpose | Quality |
 |---|---|---|
-| `gpt-image-2.5-flare` | Default; fast generation and editing | auto, low, medium, high, xhigh, max |
-| `gpt-image-2.5-sunburst` | Higher-precision generation and editing | auto, low, medium, high, xhigh, max |
-| `gpt-image-2` | Previous model; retained for compatibility | auto, low, medium, high |
+| `gpt-image-2.6-flare` | Default; fast generation and editing | auto, low, medium, high, xhigh, max |
+| `gpt-image-2.6-sunburst` | Higher-precision generation and editing | auto, low, medium, high, xhigh, max |
+| `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst` | Previous models; retained for compatibility | auto, low, medium, high, xhigh, max |
+| `gpt-image-2` | Older model; retained for compatibility | auto, low, medium, high |
 
-Use full model IDs. Other provider-supported IDs remain accepted; actual account availability is determined by Codex. Unsupported models fail without automatic fallback. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, `IMAGEGEN_CODEX_IMAGE_MODEL`, then Flare.
+Use full model IDs. Other provider-supported IDs remain accepted; actual account availability is determined by Codex. Unsupported models fail without automatic fallback. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, `IMAGEGEN_CODEX_IMAGE_MODEL`, then Flare. The default is a pinned ID: Codex publishes no image-model listing to discover the latest one from.
 
 Quality defaults to `auto`. Requests go straight to the Codex image endpoints (`/backend-api/codex/images/generations` and `/edits`, the ones the Codex app's own image tool uses): no orchestration model runs, the prompt reaches the image model verbatim, and usage draws on the plan's separate daily image allowance rather than the 5-hour/weekly Codex limits.
 
-The backend decides what it actually renders. Observed on a Plus account (October 2026): it may serve a different quality (`low` regardless of the request) and size (about 1.57 MP at a varying aspect) than requested, and it accepts any `model` value without error. Read `width`/`height` from the JSON result; the usage log records what was served. The endpoint always returns PNG, so JPEG and WebP are converted locally.
+The backend decides what it actually renders. Observed on a Plus account (November 2026): it chose quality and size regardless of the request (about 1.57 MP at a varying aspect), and it accepted any `model` value, including a made-up ID, without naming the model it used. `imageModel` in the JSON result therefore reports what was requested, not proof of what rendered; see the [research notes](docs/codex-image-research.md). Read `width`/`height` from the JSON result; the usage log records what was served. The endpoint returns PNG, so JPEG and WebP are converted locally. OpenAI's SVG and GIF output are not available here: the endpoint ignored an SVG request and rejected a GIF one.
 
 The endpoint has no mask input, so a Codex `--mask` is sent as the last edit image and a fixed instruction is appended to the prompt: change only where the mask is transparent and keep the opaque area as in the source. This is the one case where the prompt is not sent verbatim; the JSON result still reports the caller's prompt. The mask must be a PNG matching the source dimensions, with the edit area transparent. The mask is targeting guidance, not a whitelist: the model may also change areas outside it (lighting, shadows, reflections), so do not composite the output back onto the source. It uses one of the four edit-image slots.
 
-For native transparent assets, use a 2.5 model, PNG or WebP, and explicitly request real alpha transparency in the prompt. The Codex provider keeps `background` on `auto`; the CLI does not expose `--background`. Transparent output renders at medium quality and costs roughly two to four times the image tokens of an opaque low-quality image. Check the decoded alpha channel before accepting a cutout, and repeat the transparency requirement during later edits. See the [packaged skill](apps/cli/skill/SKILL.md) for examples and model guidance.
+For native transparent assets, use a Flare or Sunburst model, PNG or WebP, and explicitly request real alpha transparency in the prompt. The Codex provider keeps `background` on `auto`; the CLI does not expose `--background`. Transparent output renders at medium quality and costs roughly two to four times the image tokens of an opaque low-quality image. Check the decoded alpha channel before accepting a cutout, and repeat the transparency requirement during later edits. See the [packaged skill](apps/cli/skill/SKILL.md) for examples and model guidance.
 
 ```sh
 imagegen edit --format webp --source ./product.png --prompt "make the product blue" --out ./blue.webp
 imagegen generate --model gpt-image-2 --prompt "a lighthouse" --out ./classic.png
-imagegen generate --model gpt-image-2.5-sunburst --quality max --prompt "a product photo" --out ./product.png
+imagegen generate --model gpt-image-2.6-sunburst --quality max --prompt "a product photo" --out ./product.png
 ```
 
 ## Configuration
 
-- `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2.5-flare`); `--model` takes precedence.
+- `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the image model (default `gpt-image-2.6-flare`); `--model` takes precedence.
 - `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
 - `IMAGEGEN_USAGE_LOG` — optional file path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds the image request ID, image tokens (`imageGeneration`), the size/quality/background actually served (`served`), and the ChatGPT plan window reported with the response (`planLimits`: plan type, active limit, and daily image allowance used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
 
