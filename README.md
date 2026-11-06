@@ -157,7 +157,7 @@ Each count item is a separate request returning its last final image. Calls use 
 
 ## Named image API endpoints
 
-Save a profile for OpenRouter or a gateway using the OpenAI Images API format:
+Save a profile for OpenRouter or a gateway using the OpenAI Images API format, or for [FLUX 3 Image Klein on your own GPU](#local-flux-3-image-klein-through-comfyui):
 
 ```sh
 imagegen providers add openrouter --api openrouter --model <image-model-id>
@@ -179,6 +179,37 @@ The model is `--model` when supplied, otherwise the profile default; one is requ
 Portable flags retain their existing meaning, with model-specific limits. OpenRouter supports aspect ratios and pixel dimensions; generic OpenAI Images endpoints accept pixels or presets (square 1024x1024, portrait 1024x1536, landscape 1536x1024, wide 1536x864), and arbitrary aspect-only sizes are rejected. Automatic/default fields are omitted. Quality and output format are sent only when explicitly requested; unsupported model options produce endpoint errors. PNG/JPEG/WebP are verified deliverables, with format conversion but no local resizing. The JSON dimensions describe actual returned pixels.
 
 References go through OpenRouter `input_references` or OpenAI multipart edits. Editing keeps source first, followed by references. Masks are available only for OpenAI Images-compatible endpoints that implement them. Four references, an additional edit source, and counts from one to four are supported by the CLI; a particular model may accept less. Count invokes separate single-image requests; there are no automatic paid retries, model substitutions, conversational sessions, or arbitrary request templates. Requests and image downloads share a 180-second timeout per count item. See [API compatibility research](docs/configurable-api-research.md) and the packaged skill for provider/model selection.
+
+### Local FLUX 3 Image Klein through ComfyUI
+
+`--api comfyui` runs FLUX 3 Image Klein on your own GPU through a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) v0.44 or later server, without its UI. The int8 weights are built for GPUs with 8 GB or more of VRAM. The CLI does not start or stop the server.
+
+1. Accept the [FLUX Kommunity License](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy), which limits commercial output to qualifying users and sets its own conditions on distribution and on training other models. Then run `hf auth login`.
+2. Download the distilled weights (about 18 GB) into ComfyUI's model folder:
+
+   ```sh
+   hf download black-forest-labs/flux-3-image-klein-comfy \
+     diffusion_models/flux3-image-klein-int8-convrot.safetensors \
+     text_encoders/qwen3vl_4b_int8_convrot.safetensors \
+     text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors \
+     vae/flux2-vae.safetensors \
+     --local-dir ComfyUI/models
+   ```
+
+3. Start the API with `python main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch`, then add a profile:
+
+   ```sh
+   imagegen providers add klein --api comfyui --base-url http://127.0.0.1:8188
+   imagegen generate --provider klein --prompt "A lighthouse at dawn" --size wide --out ./lighthouse.png
+   imagegen edit --provider klein --source ./lighthouse.png --prompt "Make it a stormy night" --out ./storm.png
+   ```
+
+ComfyUI profiles need no key and offer two models, and `models --provider <name>` lists those whose weights are installed:
+
+- `flux3-klein` (default) expands the prompt with Black Forest Labs' upsampler, as they recommend for every request. The JSON `prompt` field reports the caption that was rendered.
+- `flux3-klein-raw` uses the prompt verbatim as the full scene caption and doesn't need the upsampler weights. Short prompts give generic results.
+
+`--quality` selects steps: `low` 4, `medium` 8, `high` or `auto` 16. Sizes accept presets, pixels, or aspect ratios (about one megapixel), are rounded to multiples of 16, and need edges from 256 to 2048 pixels. `auto` means 1024x1024 for text-to-image; edits follow the first reference's shape at about one megapixel. Masks are rejected. Count runs separate jobs with new seeds, reported under `served` with the step count. Each job has a 600-second timeout. Files are re-encoded so ComfyUI's embedded workflow never reaches the output.
 
 ### Diagnosing gateway errors
 

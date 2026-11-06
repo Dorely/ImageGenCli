@@ -24,7 +24,7 @@ export function imageSize(
     return { size: `${Number(pixels[1])}x${Number(pixels[2])}` };
   const ratio = /^(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)$/.exec(size);
   if (
-    api === "openrouter" &&
+    api !== "openai-images" &&
     ratio &&
     Number(ratio[1]) > 0 &&
     Number(ratio[2]) > 0 &&

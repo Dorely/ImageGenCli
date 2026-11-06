@@ -28,7 +28,7 @@ import {
   CodexTokenManager,
 } from "@imagegencli/providers-codex";
 import { createGeminiEntry, geminiStore, storedKey } from "@imagegencli/providers-google";
-import { ProfileRepository, createProfileEntry, ConfigurableImageProvider, profileStore, profileKey, validateApiKey, type EndpointProfile } from "@imagegencli/providers-configurable";
+import { ProfileRepository, createProfileEntry, createProfileProvider, profileStore, profileKey, validateApiKey, type EndpointProfile } from "@imagegencli/providers-configurable";
 import { readApiKey } from "./key-input.js";
 import { helpFor } from "./help.js";
 import { installSkill, SkillExistsError, skillText } from "./skill.js";
@@ -504,8 +504,7 @@ async function main(): Promise<void> {
       const selected = requestedProviders(flags);
       if (!selected || selected.length !== 1) fail("usage", "Model discovery requires exactly one --provider <profile-name>.", EXIT_USAGE);
       const profile = await new ProfileRepository().get(selected[0]);
-      const provider = new ConfigurableImageProvider(profile, async () => profileKey(profile, await profileStore()));
-      process.stdout.write(`${JSON.stringify({ provider: profile.name, models: await provider.models() })}\n`);
+      process.stdout.write(`${JSON.stringify({ provider: profile.name, models: await createProfileProvider(profile).models() })}\n`);
       return;
     }
     if (command === "providers" && !sub) {

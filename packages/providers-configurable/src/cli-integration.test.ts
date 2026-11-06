@@ -148,6 +148,101 @@ describe("endpoint CLI", () => {
     ]);
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("/models");
   });
+  it("drives a ComfyUI profile end to end without a key", async () => {
+    const added = await run([
+      "providers",
+      "add",
+      "local",
+      "--api",
+      "comfyui",
+      "--base-url",
+      "http://127.0.0.1:8188",
+    ]);
+    expect(added.provider.auth).toBe("none");
+    const data = await sharp({
+      create: { width: 4, height: 3, channels: 3, background: "blue" },
+    })
+      .png()
+      .toBuffer();
+    const loaders: Record<string, [string, string[]]> = {
+      UNETLoader: ["unet_name", ["flux3-image-klein-int8-convrot.safetensors"]],
+      CLIPLoader: [
+        "clip_name",
+        [
+          "qwen3vl_4b_int8_convrot.safetensors",
+          "qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+        ],
+      ],
+      VAELoader: ["vae_name", ["flux2-vae.safetensors"]],
+    };
+    const fetchImpl = vi.fn(async (input: unknown) => {
+      const url = new URL(String(input));
+      if (url.pathname.startsWith("/object_info/")) {
+        const node = url.pathname.split("/").pop() ?? "";
+        const [name, files] = loaders[node];
+        return Response.json({
+          [node]: { input: { required: { [name]: [files] } } },
+        });
+      }
+      if (url.pathname === "/prompt")
+        return Response.json({ prompt_id: "job" });
+      if (url.pathname === "/history/job")
+        return Response.json({
+          job: {
+            status: { status_str: "success", completed: true },
+            outputs: {
+              caption: { text: ["Expanded caption"] },
+              output: { images: [{ filename: "out.png", type: "temp" }] },
+            },
+          },
+        });
+      return new Response(new Uint8Array(data));
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+    expect(
+      (await run(["models", "--provider", "local"])).models.map(
+        (m: { id: string }) => m.id,
+      ),
+    ).toEqual(["flux3-klein", "flux3-klein-raw"]);
+    const out = join(state.root, "local.png");
+    const result = await run([
+      "generate",
+      "--provider",
+      "local",
+      "--prompt",
+      "a red cube",
+      "--quality",
+      "low",
+      "--out",
+      out,
+    ]);
+    expect(result.images[0]).toMatchObject({
+      path: out,
+      width: 4,
+      height: 3,
+      prompt: "Expanded caption",
+      servedModel: "flux3-image-klein-int8-convrot",
+      served: { steps: 4, upsampled: true },
+    });
+    expect(result.requestedModel).toBe("flux3-klein");
+    await expect(
+      run([
+        "edit",
+        "--provider",
+        "local",
+        "--source",
+        out,
+        "--mask",
+        out,
+        "--prompt",
+        "brief",
+        "--out",
+        join(state.root, "edited.png"),
+      ]),
+    ).rejects.toThrow();
+    expect(state.exits[0]).toBe(2);
+    expect(stderr).toContain("no mask input");
+  });
   it("saves actual raster bytes through generate and edit, preserving source order", async () => {
     await run([
       "providers",

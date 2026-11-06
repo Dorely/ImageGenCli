@@ -7,7 +7,7 @@ import {
   type CredentialStore,
 } from "@imagegencli/credentials";
 import { ProviderError } from "@imagegencli/core";
-export type ApiFormat = "openrouter" | "openai-images";
+export type ApiFormat = "openrouter" | "openai-images" | "comfyui";
 export interface EndpointProfile {
   name: string;
   api: ApiFormat;
@@ -50,10 +50,12 @@ export function validateProfile(value: unknown): EndpointProfile {
     throw usage(
       "Endpoint name must use lowercase letters, digits, and hyphens, and cannot be codex or gemini.",
     );
-  if (p.api !== "openrouter" && p.api !== "openai-images")
-    throw usage("API format must be openrouter or openai-images.");
+  if (p.api !== "openrouter" && p.api !== "openai-images" && p.api !== "comfyui")
+    throw usage("API format must be openrouter, openai-images, or comfyui.");
   if (p.auth !== undefined && p.auth !== "bearer" && p.auth !== "none")
     throw usage("Auth must be bearer or none.");
+  if (p.api === "comfyui" && p.auth === "bearer")
+    throw usage("ComfyUI profiles do not use API keys. Use --auth none.");
   const raw =
     p.baseUrl ??
     (p.api === "openrouter" ? "https://openrouter.ai/api/v1" : undefined);
@@ -84,7 +86,7 @@ export function validateProfile(value: unknown): EndpointProfile {
     name: p.name,
     api: p.api,
     baseUrl: url.toString().replace(/\/+$/, ""),
-    auth: p.auth ?? "bearer",
+    auth: p.auth ?? (p.api === "comfyui" ? "none" : "bearer"),
     ...(typeof p.model === "string" ? { model: p.model.trim() } : {}),
   };
 }

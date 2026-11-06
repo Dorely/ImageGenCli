@@ -20,6 +20,8 @@ import { imageSize } from "./image-size.js";
 import { EndpointHttp, record } from "./http.js";
 import { openRouterRequest } from "./openrouter.js";
 import { openAIRequest } from "./openai-images.js";
+import { ComfyUIImageProvider } from "./comfyui.js";
+import { validateImageRequest } from "./validation.js";
 export interface EndpointModel {
   id: string;
   name?: string;
@@ -132,26 +134,14 @@ export class ConfigurableImageProvider implements IImageProvider {
       throw usage(
         "Supply --model or configure a default model with providers update.",
       );
-    if ((request.referenceImages?.length ?? 0) > 4)
-      throw usage("At most four reference images are allowed.");
-    const count = request.count ?? 1;
-    if (!Number.isInteger(count) || count < 1 || count > 4)
-      throw usage("Image count must be from 1 to 4.");
     if (mask && this.profile.api === "openrouter")
       throw usage(
         "OpenRouter image API does not expose masks. Describe the edit region in the prompt.",
       );
-    for (const image of [...images, ...(mask ? [mask] : [])])
-      if (
-        !["image/png", "image/jpeg", "image/webp"].includes(image.contentType)
-      )
-        throw usage("Input images must be PNG, JPEG, or WebP.");
-    const format = (request.format ?? "png")
-      .trim()
-      .toLowerCase()
-      .replace(/^jpg$/, "jpeg");
-    if (!["png", "jpeg", "webp"].includes(format))
-      throw usage("Output format must be png, jpeg, or webp.");
+    const { count, format } = validateImageRequest(request, [
+      ...images,
+      ...(mask ? [mask] : []),
+    ]);
     const quality = request.quality?.trim().toLowerCase();
     if (quality && !/^[a-z][a-z0-9_-]*$/.test(quality))
       throw usage("Quality must be a provider-supported quality name.");
@@ -244,9 +234,7 @@ export class ConfigurableImageProvider implements IImageProvider {
             // Decode to verify that a valid header is not concealing truncated pixels.
             await sharp(data).stats();
             if (metadata.format !== format)
-              data = await sharp(data)
-                .toFormat(format as "png" | "jpeg" | "webp")
-                .toBuffer();
+              data = await sharp(data).toFormat(format).toBuffer();
             return {
               data,
               width: metadata.width,
@@ -267,11 +255,16 @@ export class ConfigurableImageProvider implements IImageProvider {
     return { provider: this.name, requestedModel: model, images: results };
   }
 }
+export function createProfileProvider(profile: EndpointProfile) {
+  return profile.api === "comfyui"
+    ? new ComfyUIImageProvider(profile)
+    : new ConfigurableImageProvider(profile, async () =>
+        profileKey(profile, await profileStore()),
+      );
+}
 export function createProfileEntry(profile: EndpointProfile): ProviderEntry {
   return {
-    provider: new ConfigurableImageProvider(profile, async () =>
-      profileKey(profile, await profileStore()),
-    ),
+    provider: createProfileProvider(profile),
     authStatus: async () => {
       let configured = profile.auth === "none";
       if (!configured)

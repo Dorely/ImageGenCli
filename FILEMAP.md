@@ -131,6 +131,11 @@
 | `packages/providers-configurable/src/http.ts` | Bounded HTTP operations, sanitized upstream quota/retry diagnostics, and credential-free image downloads. |
 | `packages/providers-configurable/src/openrouter.ts` | Dedicated OpenRouter image request encoding with inline references. |
 | `packages/providers-configurable/src/openai-images.ts` | OpenAI Images JSON generation and multipart edit request encoding. |
-| `packages/providers-configurable/src/provider.ts` | Provider registration, model discovery, image validation, and output conversion. |
+| `packages/providers-configurable/src/validation.ts` | Shared request limits for reference count, image count, input types, and output format. |
+| `packages/providers-configurable/src/provider.ts` | Provider registration and protocol selection, model discovery, image validation, and output conversion. |
 | `packages/providers-configurable/src/provider.test.ts` | Mocked protocol, size, count, discovery, error, download, and timeout coverage. |
+| `packages/providers-configurable/src/comfyui.ts` | ComfyUI provider: weight checks, temp uploads, job queueing and polling, and metadata-free output encoding. |
+| `packages/providers-configurable/src/comfyui.test.ts` | Mocked ComfyUI workflows, sizes, quality, uploads, discovery, failure, and timeout coverage. |
+| `packages/providers-configurable/src/flux3-klein.ts` | FLUX 3 Klein model IDs, weight files, size and quality mapping, and the ComfyUI workflow graph. |
+| `packages/providers-configurable/src/flux3-klein-prompts.ts` | Black Forest Labs' prompt upsampler instructions, unchanged, with attribution. |
 | `packages/providers-configurable/src/cli-integration.test.ts` | Isolated profile commands, auth, discovery, generation/edit output, and exit-code tests. |

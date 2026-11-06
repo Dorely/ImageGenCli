@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "license": "MIT",
-  "description": "Named image endpoints using OpenRouter and OpenAI Images protocols.",
+  "description": "Named image endpoints using OpenRouter, OpenAI Images, and ComfyUI protocols.",
   "author": "Dorely",
   "homepage": "https://github.com/Dorely/ImageGenCli",
   "repository": {

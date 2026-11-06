@@ -1,6 +1,6 @@
 # Configurable image API research
 
-Checked 2026-10-14. Two explicit API formats are supported; endpoint URLs alone do not establish compatibility.
+Checked 2026-10-14, with ComfyUI added 2026-11-06. Three explicit API formats are supported; endpoint URLs alone do not establish compatibility.
 
 ## OpenRouter
 
@@ -16,9 +16,34 @@ The [official image guide](https://developers.openai.com/api/docs/guides/image-g
 
 Generic OpenAI-format profiles forward pixel sizes and explicit quality/output settings without imposing Codex's raster rules. Presets resolve to concrete sizes; arbitrary aspect-only sizes require explicit pixels. Omitted or auto settings use endpoint defaults. Common `data[].b64_json` or `data[].url` outputs are accepted; downloads carry no API auth headers. Returned data is decoded, measured, checked as PNG/JPEG/WebP, and converted only when a different deliverable format is needed. Output bytes are never resized.
 
+## ComfyUI (local FLUX 3 Image Klein)
+
+ComfyUI has no image API of its own, only a workflow queue, so this adapter owns one fixed graph instead of forwarding user templates. Request and response shapes were checked against a running v0.44.0 server: `POST /upload/image` with `type=temp` (referenced in `LoadImage` as `name [temp]`), `POST /prompt`, `GET /history/{id}`, and `GET /view`. Text from `PreviewAny` appears in history as `outputs.<id>.text`, including when the node was cached. A failed validation returns HTTP 400 with `node_errors`; loader files are read from `GET /object_info/{node}` first so missing weights produce a specific message.
+
+The graph follows Comfy's [distilled Klein templates](https://github.com/Comfy-Org/workflow_templates) and [Black Forest Labs' model card](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy): 16 steps, CFG 1, euler with the simple scheduler, and int8 weights. It uses `TextGenerateV2` directly because the templates' `TextGenerate` is deprecated and replaced by this node on the server. Upsampler instructions come unchanged from Black Forest Labs' Apache-2.0 `system_prompts.json`, since the template's edit copy contains escaped line breaks. Their generate instructions accept a leading `TARGET CANVAS: W:H` line, which the adapter adds for non-square text-to-image.
+
+Only the distilled checkpoint is exposed. The base checkpoint (50 steps, CFG 3.5) is built for fine-tuning and would double the render time without a current use here.
+
+Measured 2026-11-06 through the CLI on an RTX 4070 (12 GB) against ComfyUI v0.44.0, including Node startup. All times are 1024x1024 at 16 steps with the upsampler unless noted.
+
+| Scenario | Time |
+|---|---|
+| First image after server start | 17.4 s |
+| New prompt, models loaded | 15.4 s |
+| Same prompt, upsampler output cached | 6.4 s |
+| Same prompt, cached, 8 steps | 3.8 s |
+| Same prompt, cached, 4 steps | 2.3 s |
+| New prompt, 1536x864 | 17.8 s |
+| Edit, source only | 22.3 s |
+| Edit, source plus one reference | 32 s |
+| `flux3-klein-raw`, no upsampler | 7.9 s |
+| New prompt, 2048x2048 | 42 s |
+
+ComfyUI held 9.2 GB of VRAM after these runs. None of the output PNGs contained the workflow metadata ComfyUI normally embeds. The same `generate` path also succeeded from an installed `npm pack` tarball.
+
 ## Configuration, credentials, and errors
 
-Named non-secret profiles live in a versioned file next to existing credentials. API-key records stay within the vault/file persistence boundary. Protocol-specific adapters, transport, and discovery live in one configurable-provider package. No raw templates, arbitrary headers, job polling, or provider-specific passthrough fields are supported in this version.
+Named non-secret profiles live in a versioned file next to existing credentials. API-key records stay within the vault/file persistence boundary. Protocol-specific adapters, transport, and discovery live in one configurable-provider package. No raw templates, arbitrary headers, or provider-specific passthrough fields are supported in this version, and only the ComfyUI adapter polls for job completion.
 
 HTTPS is required except for loopback HTTP. Base URLs reject userinfo, query, and fragments; API requests reject redirects rather than risk credential forwarding. Result downloads allow signed queries and redirects but never receive API authentication headers. Raw error responses and transport exception messages are not echoed; validated upstream names, HTTP status, and numeric Retry-After seconds are surfaced as structured diagnostics; HTTP classifications provide auth, rate-limit, usage, server, download, timeout, or malformed-image guidance. The timeout spans response and image-download consumption. There are no automatic retries.
 

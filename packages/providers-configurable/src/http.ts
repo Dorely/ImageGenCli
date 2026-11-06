@@ -3,6 +3,10 @@ export const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+export interface EndpointRequests {
+  json: (url: string, init?: RequestInit) => Promise<Record<string, unknown>>;
+  bytes: (url: string) => Promise<Uint8Array>;
+}
 export class EndpointHttp {
   constructor(
     private readonly fetchImpl: typeof fetch = fetch,
@@ -14,15 +18,7 @@ export class EndpointHttp {
         message: "Request timeout must be positive and finite.",
       });
   }
-  async run<T>(
-    action: (http: {
-      json: (
-        url: string,
-        init?: RequestInit,
-      ) => Promise<Record<string, unknown>>;
-      bytes: (url: string) => Promise<Uint8Array>;
-    }) => Promise<T>,
-  ): Promise<T> {
+  async run<T>(action: (http: EndpointRequests) => Promise<T>): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
