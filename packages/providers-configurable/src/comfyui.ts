@@ -9,23 +9,36 @@ import {
   type ImageInput,
   type ProviderResult,
 } from "@imagegencli/core";
+import {
+  fillWorkflow,
+  loadWorkflow,
+  type ComfyGraph,
+} from "./comfyui-workflow.js";
 import { EndpointHttp, record, type EndpointRequests } from "./http.js";
+import { comfySize } from "./image-size.js";
 import { usage, validateProfile, type EndpointProfile } from "./profiles.js";
 import { validateImageRequest } from "./validation.js";
 import {
   FLUX3_KLEIN_CHECKPOINT,
   FLUX3_KLEIN_MODELS,
   flux3KleinModel,
-  flux3KleinSize,
   flux3KleinSteps,
   flux3KleinWeights,
   flux3KleinWorkflow,
-  type Flux3KleinJob,
   type Flux3KleinModel,
 } from "./flux3-klein.js";
 import type { EndpointModel, EndpointOptions } from "./provider.js";
 export interface ComfyUIOptions extends EndpointOptions {
   pollIntervalMs?: number;
+}
+interface ComfyPlan {
+  model: string;
+  preflight(http: EndpointRequests): Promise<void>;
+  graph(images: string[], seed: number): ComfyGraph;
+  described(
+    outputs: Record<string, unknown>,
+    seed: number,
+  ): Pick<GeneratedImage, "prompt" | "servedModel" | "usage">;
 }
 const EXTENSIONS: Record<string, string> = {
   "image/png": "png",
@@ -33,10 +46,20 @@ const EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
 };
 // ComfyUI reports loader files as [[...]] or ["COMBO", { options: [...] }].
-function comboChoices(spec: unknown): unknown[] {
-  if (!Array.isArray(spec)) return [];
+function comboOptions(spec: unknown): unknown[] | undefined {
+  if (!Array.isArray(spec)) return undefined;
   const choices = spec[0] === "COMBO" ? record(spec[1]).options : spec[0];
-  return Array.isArray(choices) ? choices : [];
+  return Array.isArray(choices) ? choices : undefined;
+}
+const comboChoices = (spec: unknown): unknown[] => comboOptions(spec) ?? [];
+async function sourceShape(image: ImageInput) {
+  try {
+    const { width, height } = await sharp(image.data).metadata();
+    return comfySize(`${width}:${height}`);
+  } catch (e) {
+    if (e instanceof ProviderError) throw e;
+    throw usage("Could not read the source image's dimensions.");
+  }
 }
 function executionFailure(messages: unknown): ProviderError {
   const failure = Array.isArray(messages)
@@ -75,16 +98,18 @@ async function encoded(data: Uint8Array, format: "png" | "jpeg" | "webp") {
 }
 export class ComfyUIImageProvider implements IImageProvider {
   readonly name: string;
+  private readonly profile: EndpointProfile;
   private readonly baseUrl: string;
   private readonly defaultModel: string;
   private readonly http: EndpointHttp;
   private readonly pollIntervalMs: number;
   constructor(profile: EndpointProfile, options: ComfyUIOptions = {}) {
     const valid = validateProfile(profile);
+    this.profile = valid;
     this.name = valid.name;
     this.baseUrl = valid.baseUrl;
-    this.defaultModel = valid.model ?? FLUX3_KLEIN_MODELS[0].id;
-    // A cold first image also loads about 18 GB of weights.
+    this.defaultModel = valid.model as string;
+    // A cold first image also loads the model's weights.
     this.http = new EndpointHttp(
       options.fetchImpl,
       options.timeoutSeconds ?? 600,
@@ -93,7 +118,7 @@ export class ComfyUIImageProvider implements IImageProvider {
   }
   readonly sizePolicy = {
     resolveSize: (size: string | undefined) => {
-      const resolved = flux3KleinSize(size);
+      const resolved = comfySize(size);
       if (!resolved) return { size: "auto" };
       const { width, height } = resolved;
       return {
@@ -110,14 +135,38 @@ export class ComfyUIImageProvider implements IImageProvider {
   async edit(request: EditRequest): Promise<ProviderResult> {
     if (request.mask)
       throw usage(
-        "FLUX 3 Klein has no mask input. Describe the edit region in the prompt.",
+        "ComfyUI profiles have no mask input. Describe the edit region in the prompt.",
       );
     return this.run(request, [
       request.sourceImage,
       ...(request.referenceImages ?? []),
     ]);
   }
+  private get usesWorkflowFiles(): boolean {
+    return Boolean(this.profile.workflow || this.profile.editWorkflow);
+  }
   async models(): Promise<EndpointModel[]> {
+    if (this.usesWorkflowFiles) {
+      const { workflow, editWorkflow } = this.profile;
+      const files = await Promise.all(
+        [workflow, editWorkflow].flatMap((f) => (f ? [loadWorkflow(f)] : [])),
+      );
+      return this.reachable(() =>
+        this.http.run(async (http) => {
+          for (const file of files) await this.requireInputs(http, file.graph);
+          return [
+            {
+              id: this.defaultModel,
+              name: `${this.defaultModel}, from this profile's workflow files`,
+              capabilities: "reported",
+              inputModalities: editWorkflow ? ["text", "image"] : ["text"],
+              outputModalities: ["image"],
+            },
+          ];
+        }),
+      );
+    }
+    flux3KleinModel(this.defaultModel);
     return this.reachable(() =>
       this.http.run(async (http) => {
         const models: EndpointModel[] = [];
@@ -138,51 +187,172 @@ export class ComfyUIImageProvider implements IImageProvider {
     request: GenerateRequest,
     images: ImageInput[],
   ): Promise<ProviderResult> {
-    const requestedModel = (request.model ?? this.defaultModel).trim();
-    const model = flux3KleinModel(requestedModel);
     const { count, format } = validateImageRequest(request, images);
-    const steps = flux3KleinSteps(request.quality);
-    const size = flux3KleinSize(request.size);
+    const plan = this.usesWorkflowFiles
+      ? await this.workflowPlan(request, images)
+      : this.kleinPlan(request);
     return this.reachable(async () => {
-      const missing = await this.http.run((http) =>
-        this.missingWeights(http, model),
-      );
-      if (missing.length)
-        throw new ProviderError({
-          kind: "configuration",
-          message: `ComfyUI is missing FLUX 3 Klein weights: ${missing.join(", ")}. Download them from black-forest-labs/flux-3-image-klein-comfy into its models folder.`,
-        });
+      await this.http.run((http) => plan.preflight(http));
       const uploaded: string[] = [];
       for (const image of images) uploaded.push(await this.upload(image));
       const results: GeneratedImage[] = [];
       for (let i = 0; i < count; i++)
         results.push(
           await this.render(
-            {
-              prompt: request.prompt,
-              upsample: model.upsample,
-              images: uploaded,
-              size,
-              steps,
-              seed: randomInt(0xffffffffffff),
-            },
+            plan,
+            uploaded,
+            randomInt(0xffffffffffff),
             format,
           ),
         );
-      return { provider: this.name, requestedModel, images: results };
+      return {
+        provider: this.name,
+        requestedModel: plan.model,
+        images: results,
+      };
     });
+  }
+  private kleinPlan(request: GenerateRequest): ComfyPlan {
+    const model = flux3KleinModel((request.model ?? this.defaultModel).trim());
+    const steps = flux3KleinSteps(request.quality);
+    const size = comfySize(request.size);
+    return {
+      model: model.id,
+      preflight: async (http) => {
+        const missing = await this.missingWeights(http, model);
+        if (missing.length)
+          throw new ProviderError({
+            kind: "configuration",
+            message: `ComfyUI is missing FLUX 3 Klein weights: ${missing.join(", ")}. Download them from black-forest-labs/flux-3-image-klein-comfy into its models folder.`,
+          });
+      },
+      graph: (images, seed) =>
+        flux3KleinWorkflow({
+          prompt: request.prompt,
+          upsample: model.upsample,
+          images,
+          size,
+          steps,
+          seed,
+        }),
+      described: (outputs, seed) => {
+        const caption = record(outputs.caption).text;
+        return {
+          prompt:
+            model.upsample &&
+            Array.isArray(caption) &&
+            typeof caption[0] === "string"
+              ? caption[0]
+              : request.prompt,
+          servedModel: FLUX3_KLEIN_CHECKPOINT,
+          usage: { served: { steps, seed, upsampled: model.upsample } },
+        };
+      },
+    };
+  }
+  private async workflowPlan(
+    request: GenerateRequest,
+    images: ImageInput[],
+  ): Promise<ComfyPlan> {
+    const model = this.defaultModel;
+    if (request.model && request.model.trim() !== model)
+      throw usage(
+        `Profile ${this.name} renders ${model} from its workflow files. Update the profile to change models.`,
+      );
+    if ((request.quality ?? "auto").trim().toLowerCase() !== "auto")
+      throw usage(
+        "Workflow files set their own sampling, so only --quality auto applies.",
+      );
+    const path = images.length
+      ? this.profile.editWorkflow
+      : this.profile.workflow;
+    if (!path)
+      throw usage(
+        images.length
+          ? `Profile ${this.name} has no --edit-workflow, so it cannot take input images.`
+          : `Profile ${this.name} has no --workflow, so it needs a source image.`,
+      );
+    const workflow = await loadWorkflow(path);
+    if (workflow.images !== images.length)
+      throw usage(
+        `This workflow takes ${workflow.images} input images, but the request has ${images.length}.`,
+      );
+    const requested = comfySize(request.size);
+    if (requested && !workflow.sized)
+      throw usage(
+        "This workflow has fixed dimensions, so only --size auto applies.",
+      );
+    const size = !workflow.sized
+      ? undefined
+      : (requested ??
+        (images[0]
+          ? await sourceShape(images[0])
+          : { width: 1024, height: 1024 }));
+    return {
+      model,
+      preflight: (http) => this.requireInputs(http, workflow.graph),
+      graph: (uploaded, seed) =>
+        fillWorkflow(workflow, {
+          prompt: request.prompt,
+          seed,
+          size,
+          images: uploaded,
+        }),
+      described: (_, seed) => ({
+        prompt: request.prompt,
+        servedModel: model,
+        usage: { served: { seed } },
+      }),
+    };
   }
   private async reachable<T>(action: () => Promise<T>): Promise<T> {
     try {
       return await action();
     } catch (e) {
-      if (e instanceof ProviderError && e.kind === "transport")
+      if (e instanceof ProviderError && e.kind === "transport") {
+        const start = this.profile.startCommand;
         throw new ProviderError({
           kind: "transport",
-          message: `ComfyUI is not reachable at ${this.baseUrl}. Start it and retry.`,
+          message: `ComfyUI is not reachable at ${this.baseUrl}. Start it${start ? ` with \`${start}\`` : ""} and retry.`,
         });
+      }
       throw e;
     }
+  }
+  // Names what a workflow file needs instead of queueing a doomed job.
+  private async requireInputs(
+    http: EndpointRequests,
+    graph: ComfyGraph,
+  ): Promise<void> {
+    const specs = new Map<string, Record<string, unknown>>();
+    const missing = new Set<string>();
+    for (const node of Object.values(graph)) {
+      if (!specs.has(node.class_type)) {
+        const info = await http.json(
+          `${this.baseUrl}/object_info/${encodeURIComponent(node.class_type)}`,
+        );
+        specs.set(node.class_type, record(info[node.class_type]));
+      }
+      const spec = record(specs.get(node.class_type));
+      if (!Object.keys(spec).length) {
+        missing.add(`node type ${node.class_type}`);
+        continue;
+      }
+      const inputs = {
+        ...record(record(spec.input).required),
+        ...record(record(spec.input).optional),
+      };
+      for (const [name, value] of Object.entries(node.inputs)) {
+        if (typeof value !== "string" || value.includes("{{")) continue;
+        if (comboOptions(inputs[name])?.includes(value) === false)
+          missing.add(`${value} for ${node.class_type}.${name}`);
+      }
+    }
+    if (missing.size)
+      throw new ProviderError({
+        kind: "configuration",
+        message: `ComfyUI is missing what this workflow needs: ${[...missing].join(", ")}. Install it under ComfyUI, restart the server, and retry.`,
+      });
   }
   private async missingWeights(
     http: EndpointRequests,
@@ -226,7 +396,9 @@ export class ComfyUIImageProvider implements IImageProvider {
     });
   }
   private render(
-    job: Flux3KleinJob,
+    plan: ComfyPlan,
+    images: string[],
+    seed: number,
     format: "png" | "jpeg" | "webp",
   ): Promise<GeneratedImage> {
     return this.http.run(async (http) => {
@@ -234,15 +406,14 @@ export class ComfyUIImageProvider implements IImageProvider {
         .json(`${this.baseUrl}/prompt`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ prompt: flux3KleinWorkflow(job) }),
+          body: JSON.stringify({ prompt: plan.graph(images, seed) }),
         })
         .catch((e: unknown) => {
           if (e instanceof ProviderError && e.statusCode === 400)
             throw new ProviderError({
               kind: "server",
               statusCode: 400,
-              message:
-                "ComfyUI rejected the FLUX 3 Klein workflow. Update it to v0.44 or later and check its console for the failing node.",
+              message: `ComfyUI rejected the ${plan.model} workflow. Check its console for the failing node, and update ComfyUI if a node is unknown.`,
             });
           throw e;
         });
@@ -254,8 +425,10 @@ export class ComfyUIImageProvider implements IImageProvider {
       const outputs = record(
         (await this.finished(http, queued.prompt_id)).outputs,
       );
-      const images = record(outputs.output).images;
-      const file = record(Array.isArray(images) ? images[0] : undefined);
+      const saved = Object.values(outputs)
+        .map((output) => record(output).images)
+        .find((list) => Array.isArray(list) && list.length);
+      const file = record(Array.isArray(saved) ? saved[0] : undefined);
       if (typeof file.filename !== "string")
         throw new ProviderError({
           kind: "no_image",
@@ -267,23 +440,11 @@ export class ComfyUIImageProvider implements IImageProvider {
         type: typeof file.type === "string" ? file.type : "temp",
       });
       const data = await http.bytes(`${this.baseUrl}/view?${query}`);
-      const caption = record(outputs.caption).text;
       return {
         ...(await encoded(data, format)),
         mimeType: `image/${format}`,
-        prompt:
-          job.upsample && Array.isArray(caption) && typeof caption[0] === "string"
-            ? caption[0]
-            : job.prompt,
         responseId: queued.prompt_id,
-        servedModel: FLUX3_KLEIN_CHECKPOINT,
-        usage: {
-          served: {
-            steps: job.steps,
-            seed: job.seed,
-            upsampled: job.upsample,
-          },
-        },
+        ...plan.described(outputs, seed),
       };
     });
   }

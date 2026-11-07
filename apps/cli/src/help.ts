@@ -1,9 +1,13 @@
 const PROFILE_HELP = `Named endpoint profiles:
   imagegen providers add <name> --api <openrouter|openai-images|comfyui>
                          [--base-url <url>] [--model <id>] [--auth <bearer|none>]
+                         [--start-command <text>] [--workflow <file>]
+                         [--edit-workflow <file>]
   imagegen providers show <name>
   imagegen providers update <name> [--api <format>] [--base-url <url>]
                          [--model <id>] [--auth <bearer|none>]
+                         [--start-command <text>] [--workflow <file>]
+                         [--edit-workflow <file>]
   imagegen providers remove <name>
   imagegen auth <name> login [--key-stdin]
   imagegen auth <name> status [--show-path]
@@ -12,8 +16,8 @@ const PROFILE_HELP = `Named endpoint profiles:
 
 OpenRouter defaults to https://openrouter.ai/api/v1. openai-images requires
 --base-url including the API prefix (e.g. https://api.openai.com/v1). comfyui
-requires --base-url of a running server (e.g. http://127.0.0.1:8188) and uses no key.
-Keys use hidden terminal input or explicit --key-stdin and the existing vault/file
+requires --base-url of its server (e.g. http://127.0.0.1:8188) and --model, and
+uses no key. Keys use hidden terminal input or explicit --key-stdin and the existing vault/file
 store. --auth none supports endpoints without keys. Config is saved in providers.json
 alongside the credential file. Origin changes clear the saved key; removing a
 profile removes its credentials. Logout preserves profile configuration.
@@ -23,19 +27,24 @@ provide one if no default is saved. models explicitly discovers model metadata;
 OpenAI-compatible model listings do not establish image capabilities.
 
 Supported protocols: OpenRouter dedicated Images API, OpenAI Images JSON /
-multipart endpoints, and local FLUX 3 Image Klein through ComfyUI, not arbitrary
-HTTP templates. Options vary by model.
+multipart endpoints, and local models through ComfyUI, not arbitrary HTTP
+templates. Options vary by model.
 OpenRouter accepts aspect ratios; openai-images needs pixels or presets:
 square 1024x1024, portrait 1024x1536, landscape 1536x1024, wide 1536x864.
 Auto options are omitted. Native masks require openai-images.
 Outputs are measured and converted to PNG/JPEG/WebP without resizing. Count uses
 separate single-image requests without automatic retries or model substitution.
 
-comfyui models: flux3-klein (default) expands the prompt and reports the rendered
-caption as prompt; flux3-klein-raw uses the prompt as the full caption. Quality
-low, medium, and high run 4, 8, and 16 steps. Sizes accept pixels, presets, or
-aspect ratios, round to multiples of 16, and need edges from 256 to 2048. Masks
-are rejected. The CLI does not start or stop ComfyUI.
+comfyui profiles: --model names what the profile renders. Built in: flux3-klein
+expands the prompt and reports the rendered caption as prompt; flux3-klein-raw
+uses the prompt as the full caption; quality low, medium, and high run 4, 8, and
+16 steps. Any other model needs --workflow (text-to-image) and/or --edit-workflow
+(input images): ComfyUI API-format JSON using {{prompt}} and {{seed}}, optionally
+{{width}} and {{height}}, and {{image1}}, {{image2}}, ... for inputs. Workflow
+files set their own sampling, so only --quality auto applies.
+Sizes accept pixels, presets, or aspect ratios, round to multiples of 16, and need
+edges from 256 to 2048. Masks are rejected. The CLI does not start or stop ComfyUI;
+--start-command records how to start it and is quoted when it is not reachable.
 `;
 
 const IMAGE_OPTIONS = `Image options (generate, edit):

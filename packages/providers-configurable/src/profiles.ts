@@ -1,5 +1,5 @@
 import { readFile, mkdir, writeFile, rename, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   defaultCredentialFilePath,
@@ -14,7 +14,11 @@ export interface EndpointProfile {
   baseUrl: string;
   model?: string;
   auth: "bearer" | "none";
+  startCommand?: string;
+  workflow?: string;
+  editWorkflow?: string;
 }
+const COMFY_FIELDS = ["startCommand", "workflow", "editWorkflow"] as const;
 export interface ApiKeyCredential {
   apiKey: string;
 }
@@ -36,11 +40,14 @@ export function validateProfile(value: unknown): EndpointProfile {
   const p = value as Record<string, unknown>;
   if (
     Object.keys(p).some(
-      (k) => !["name", "api", "baseUrl", "model", "auth"].includes(k),
+      (k) =>
+        !["name", "api", "baseUrl", "model", "auth", ...COMFY_FIELDS].includes(
+          k,
+        ),
     )
   )
     throw usage(
-      "Endpoint profiles accept only name, api, baseUrl, model, and auth; store keys through auth login.",
+      "Endpoint profiles accept only name, api, baseUrl, model, auth, startCommand, workflow, and editWorkflow; store keys through auth login.",
     );
   if (
     typeof p.name !== "string" ||
@@ -56,6 +63,17 @@ export function validateProfile(value: unknown): EndpointProfile {
     throw usage("Auth must be bearer or none.");
   if (p.api === "comfyui" && p.auth === "bearer")
     throw usage("ComfyUI profiles do not use API keys. Use --auth none.");
+  if (p.api !== "comfyui" && COMFY_FIELDS.some((k) => p[k] !== undefined))
+    throw usage(
+      "--start-command, --workflow, and --edit-workflow apply only to comfyui profiles.",
+    );
+  for (const field of COMFY_FIELDS) {
+    const value = p[field];
+    if (value !== undefined && (typeof value !== "string" || !value.trim()))
+      throw usage(`${field} must not be blank.`);
+    if (field !== "startCommand" && value && !isAbsolute(value as string))
+      throw usage(`${field} must be an absolute path.`);
+  }
   const raw =
     p.baseUrl ??
     (p.api === "openrouter" ? "https://openrouter.ai/api/v1" : undefined);
@@ -82,12 +100,22 @@ export function validateProfile(value: unknown): EndpointProfile {
     );
   if (p.model !== undefined && (typeof p.model !== "string" || !p.model.trim()))
     throw usage("Default model must not be blank.");
+  if (p.api === "comfyui" && p.model === undefined)
+    throw usage(
+      "ComfyUI profiles need --model: flux3-klein, flux3-klein-raw, or your name for the model in --workflow.",
+    );
   return {
     name: p.name,
     api: p.api,
     baseUrl: url.toString().replace(/\/+$/, ""),
     auth: p.auth ?? (p.api === "comfyui" ? "none" : "bearer"),
     ...(typeof p.model === "string" ? { model: p.model.trim() } : {}),
+    ...Object.fromEntries(
+      COMFY_FIELDS.flatMap((field) => {
+        const value = p[field];
+        return typeof value === "string" ? [[field, value.trim()]] : [];
+      }),
+    ),
   };
 }
 export class ProfileRepository {

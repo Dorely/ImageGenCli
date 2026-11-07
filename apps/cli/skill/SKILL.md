@@ -8,7 +8,7 @@ description: Create or edit bitmap images with the installed `imagegen` CLI (`@d
 Use the installed `imagegen` command to turn the user's prompt into image files. The CLI handles provider selection and credentials. Follow an explicit user choice of another image tool.
 
 1. Check that `imagegen` is available. If it is missing, tell the user to install it with `npm install -g @dorely13/ai-imagegen-cli`.
-2. Run `imagegen providers` to see which provider is configured. If none is configured, have the user run `imagegen auth codex login` for browser OAuth or `imagegen auth gemini login` for hidden API-key entry. Named API profiles use `imagegen auth <name> login`; see the endpoint guidance below. Credentials use the OS vault with a file fallback. Do not ask the user to paste keys into chat or put them in shell arguments; scripted setup can use explicit `--key-stdin` from an existing secure input source.
+2. Run `imagegen providers` to see which provider is configured. If none is configured, have the user run `imagegen auth codex login` for browser OAuth or `imagegen auth gemini login` for hidden API-key entry. Named API profiles use `imagegen auth <name> login`; see the endpoint guidance below. A local model uses a `local-comfy` profile and a server you start; see "Local image models through ComfyUI". Credentials use the OS vault with a file fallback. Do not ask the user to paste keys into chat or put them in shell arguments; scripted setup can use explicit `--key-stdin` from an existing secure input source.
 3. For a new image, run `imagegen generate --prompt "<user's image brief>" --out <output-path>`. For an edit, run `imagegen edit --source <existing-image> --prompt "<requested change>" --out <output-path>`. Use repeatable `--reference <file>` for visual references or continuity. Preserve the user's requested format, size, count, and output location using the corresponding CLI options.
 4. Read `imagegen help generate` or `imagegen help edit` for current option details when needed. Follow the model and transparency guidance below. If several providers are configured, select one with `--provider`.
 5. Parse the JSON result and use each `images[].path` as the generated file location. Check that the file exists and inspect the result against the brief before showing or referencing it. `requestedModel` is only what was asked for; `images[].servedModel` is the model the provider named, or null when it named none. Successful JSON does not certify image quality or transparency. If the command fails, report the CLI error and the action needed to resolve it.
@@ -98,7 +98,7 @@ Sources: [Google image generation and prompting](https://ai.google.dev/gemini-ap
 
 ## Named endpoints: OpenRouter and compatible image APIs
 
-Run `imagegen providers` to find saved profiles as well as Codex/Gemini. Select profiles by their saved name with `--provider`; keep an explicit user choice of provider and model. This tool supports the OpenRouter dedicated Images API, OpenAI Images JSON/multipart protocols, and local FLUX 3 Image Klein through ComfyUI. A generic URL does not make fal, Replicate, or another service's job API compatible.
+Run `imagegen providers` to find saved profiles as well as Codex/Gemini. Select profiles by their saved name with `--provider`; keep an explicit user choice of provider and model. This tool supports the OpenRouter dedicated Images API, OpenAI Images JSON/multipart protocols, and local models through ComfyUI (see the next section). A generic URL does not make fal, Replicate, or another service's job API compatible.
 
 For setup, use `imagegen providers add <name> --api openrouter --model <model-id>`, or `--api openai-images --base-url <url-with-api-prefix> --model <model-id>`. These are non-secret configuration commands. Have the user run `imagegen auth <name> login` for hidden key entry; do not put keys in command arguments or chat. An explicitly unauthenticated local gateway can use `--auth none`. Update settings with `providers update`, inspect them with `providers show`, and remove profiles and credentials with `providers remove`. Logout removes credentials while retaining configuration. Changing the URL's origin clears credentials.
 
@@ -109,7 +109,6 @@ Use `imagegen models --provider <name>` when model IDs or supported features nee
 - References on OpenAI-compatible generation use its edit endpoint. For edits, image 1 is the source and following images are references. OpenRouter supports reference-guided edits but no mask field; use masks only with an endpoint/model that implements OpenAI Images edits. Keep within the tool's four-reference limit and any lower model limit.
 - Each CLI call is independent. Use the previous result as `--source` for follow-up changes. Count makes separate requests; report errors without automatic retries or model substitution.
 - The CLI verifies PNG/JPEG/WebP bytes, measures dimensions, and converts formats without resizing. Inspect output before delivery. Format conversion does not create alpha, and a successful API call does not prove fidelity, transparency, or correct text.
-- Profiles with `--api comfyui` render FLUX 3 Image Klein on the user's GPU with no key or per-image cost. The CLI doesn't start ComfyUI: if it reports the server isn't reachable, ask the user to start it. Model `flux3-klein` expands a short request through its upsampler, and the JSON `prompt` field holds the caption that was rendered, so check it against the request. Model `flux3-klein-raw` needs a full scene caption. Refer to inputs by order ("the first image"). Masks are rejected, so describe the edit region, and expect changes outside it. `--quality` sets 4, 8, or 16 steps; use low for quick drafts. Sizes round to multiples of 16 with edges from 256 to 2048. Don't rely on alpha transparency or exact text; inspect the output. Use is subject to the FLUX Kommunity License that the user accepted.
 - `openai/gpt-image-2.6-flare` and `openai/gpt-image-2.6-sunburst` on OpenRouter, as observed in November 2026: a low-quality 1:1 image returned 1024x1024 for about $0.025 on either model, and Flare responded faster. Asking for transparency in the prompt produced real alpha through the CLI; verify it as described above. OpenRouter rejects SVG for these models. Its API can return animated GIF, but the CLI cannot request it.
 
 ```sh
@@ -119,3 +118,107 @@ imagegen edit --provider my-gateway --source ./lighthouse.png --prompt "Change o
 ```
 
 Protocol references: [OpenRouter Images](https://openrouter.ai/docs/guides/overview/multimodal/image-generation) and [OpenAI Images](https://developers.openai.com/api/docs/guides/image-generation). Use the installed CLI help for actual options.
+
+## Local image models through ComfyUI
+
+A local model runs on the user's GPU through a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) server, with no key or per-image cost. The CLI reaches the server through a named profile, by convention `local-comfy`, that holds everything fixed at configuration time: the server URL, the model, the command that starts the server, and any workflow files.
+
+Choose it when the user asks for local or offline generation, or when many drafts or edits make per-image cost matter and the model's limits suit the brief. Check the model's section below for what it can't do before committing to it.
+
+### Using a configured profile
+
+The CLI never starts or stops ComfyUI, so you run it around the work:
+
+1. Run `imagegen providers show local-comfy` to read its `model` and `startCommand`. If the profile doesn't exist, offer the setup below.
+2. Run `imagegen models --provider local-comfy`. A listed model means the server is up and has what it needs. An empty list or a `configuration` error means files are missing; report which, and don't start a download without asking. A `transport` error saying ComfyUI isn't reachable means the server is down.
+3. If it's down, run the profile's `startCommand` yourself as a background process, then repeat `imagegen models --provider local-comfy` every few seconds for up to two minutes. If the profile has no `startCommand`, ask the user how to start the server and save the answer with `imagegen providers update local-comfy --start-command "<command>"`. If the server doesn't come up, report its output.
+4. Run `imagegen generate --provider local-comfy` or `imagegen edit --provider local-comfy` and inspect the results as usual. The first image after a start is slower while weights load. Each job has a 600-second limit unless `--timeout` changes it.
+5. When the batch is finished, stop the server if you started it, because it keeps holding GPU memory. Leave it running if it was already up when you arrived.
+
+Each profile renders the model it was configured with. To switch models, update the profile or add another, such as `local-comfy-<model>`.
+
+### Setting up a local model
+
+Setup installs software and downloads many gigabytes, so confirm the model and install location with the user first. These steps fit any model that runs in ComfyUI.
+
+1. **Check the machine.** Compare GPU memory (`nvidia-smi`) and free disk with the model's published requirements. Offer a smaller or quantized build if the card falls short. Read the model's license with the user, since many local models restrict commercial use.
+2. **Install ComfyUI.** Pick a [release tag](https://github.com/comfyanonymous/ComfyUI/releases) and a drive with room, then install PyTorch for the user's GPU from the [selector](https://pytorch.org/get-started/locally/) before ComfyUI's requirements:
+
+   ```sh
+   git clone --depth 1 --branch <release-tag> https://github.com/comfyanonymous/ComfyUI.git <comfy-dir>
+   cd <comfy-dir>
+   python -m venv .venv
+   .venv/Scripts/python -m pip install torch torchvision --index-url <pytorch-index-for-the-gpu>
+   .venv/Scripts/python -m pip install -r requirements.txt
+   ```
+
+   On Linux and macOS the interpreter is `.venv/bin/python`. Some models need a newer ComfyUI than others, so check the model's documentation before picking the tag.
+3. **Download the weights.** Place each file in the folder the model's documentation names under `<comfy-dir>/models/`, usually `checkpoints`, `diffusion_models`, `text_encoders`, or `vae`. If the repository is gated, the user accepts its license in their browser and runs `hf auth login` themselves. Never ask for a token in chat or put one in a command.
+4. **Write a start script** in `<comfy-dir>` that keeps the server on loopback, because ComfyUI has no authentication:
+
+   ```sh
+   <comfy-dir>/.venv/Scripts/python <comfy-dir>/main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch
+   ```
+
+5. **Decide how the CLI drives the model.** If the model has a section below, its built-in graph needs only `--model <id>`. Any other model needs workflow files, described next.
+6. **Save the profile.** Paths must be reachable from any working directory, so use full paths in the start command:
+
+   ```sh
+   imagegen providers add local-comfy --api comfyui --base-url http://127.0.0.1:8188 --model <id-or-your-name-for-it> --start-command "<command that runs the script>" [--workflow <text-to-image.json>] [--edit-workflow <edit.json>]
+   ```
+
+7. **Verify.** Start the server, confirm `imagegen models --provider local-comfy` lists the model, generate one image, inspect it, and stop the server. Then tell the user the profile is ready and what the model can't do.
+
+CLI versions without ComfyUI support reject `--api comfyui`, so update `imagegen` first if `providers add` refuses it.
+
+### Workflow files for other models
+
+A workflow file is a ComfyUI graph in API format, the object of `{"<node-id>": {"class_type": ..., "inputs": {...}}}`. Get one from the model's ComfyUI template by opening it at the server's URL and exporting API JSON, or write it by hand using the node definitions at `<base-url>/object_info/<NodeClass>`. UI-format exports with `nodes` and `links` are rejected.
+
+Then replace the input values the CLI should control with tokens. A value that is only a token keeps its type, so `"seed": "{{seed}}"` sends a number. Tokens can also sit inside text, such as `"text": "pixel art, {{prompt}}"`.
+
+| Token | Required | Value |
+|---|---|---|
+| `{{prompt}}` | Yes | The `--prompt` text, used literally. |
+| `{{seed}}` | Yes | A new random seed for each `--count` image. |
+| `{{width}}`, `{{height}}` | Together, if at all | `--size` rounded to multiples of 16. Without them, `--size` is rejected. |
+| `{{image1}}`, `{{image2}}`, ... | Edit workflows | Uploaded inputs for `LoadImage`, in order: the source, then references. The request must supply exactly this many. |
+
+`--workflow` handles requests with no input images and `--edit-workflow` handles the rest. Either may be omitted, and the CLI says so if a request needs the missing one. Without `--size`, text-to-image uses 1024x1024 and edits use the first input's aspect at about one megapixel.
+
+Sampling lives in the file, so only `--quality auto` applies and `--model` must match the profile. The CLI saves the first image of the first output node that returned one, so end the graph with a single `PreviewImage` (`SaveImage` also keeps a copy in ComfyUI's output folder). Before queueing, it checks that each node type and listed file exists on the server, and names any that are missing. Alpha survives if the graph outputs it. Moving a profile back to a built-in graph takes `providers remove` and a new `providers add`.
+
+### FLUX 3 Image Klein
+
+Black Forest Labs' 5.6-billion-parameter model is built for image editing, and also does text-to-image, multiple references, bounding-box layouts, and text rendering. The int8 weights fit GPUs with 8 GB or more, and the CLI has a built-in graph for it, on ComfyUI v0.44 or later.
+
+**Setup:** accept the license on [the weights page](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy), then download about 18 GB. Save the profile with `--model flux3-klein` and no workflow files.
+
+```sh
+hf download black-forest-labs/flux-3-image-klein-comfy diffusion_models/flux3-image-klein-int8-convrot.safetensors text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors vae/flux2-vae.safetensors --local-dir <comfy-dir>/models
+```
+
+**Choose it for** local drafts, concept iteration, and reference-guided edits where some drift is acceptable. On an RTX 4070 (12 GB), a new 1024x1024 prompt took about 15 seconds at 16 steps. Repeating a prompt at `--quality low` took about 2 seconds, which suits batches of variations.
+
+**Choose something else for:**
+
+- **Transparency.** It has no native alpha. Black Forest Labs doesn't claim any, its VAE decodes three channels, and its reference code flattens transparent inputs onto white. When asked for real transparency in November 2026, it returned opaque RGB with a faint checkerboard painted onto near-white, so don't ask it for transparency. Use the native route above when a cutout is needed. If the work must stay local, ask for a plain solid contrasting background and tell the user a separate background-removal step is still required. A "pure green" request came back flat but darker, about RGB 44, 153, 75, so sample the backdrop color from the output.
+- **Exact text.** Black Forest Labs warns that text may be inaccurate or distorted, so check every character, or add the lettering afterward.
+- **Exact preservation.** Edits can change content outside the requested region, and masks are rejected. Small requested elements may not appear.
+- **Commercial work without checking the license.** Use falls under the [FLUX Kommunity License](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy), which sets its own limits on commercial output. Have the user read its text rather than relying on a summary.
+
+**Models:** `flux3-klein` expands your request through Black Forest Labs' prompt upsampler, which they say to always run, and reports the caption it rendered in the JSON `prompt` field. Check that caption against the brief. `flux3-klein-raw` sends your text as the full caption, needs no upsampler weights, and gives generic results from short prompts. `--model` picks between them on any Klein profile.
+
+**Prompting:**
+
+- With `flux3-klein`, state the subject, purpose, and constraints plainly, and let the upsampler write the rest.
+- With `flux3-klein-raw`, structure the caption as medium, subject, setting, light, and framing. Clear structure matters more than length, and quality tags add nothing.
+- There is no negative prompt, so describe what should be there: "an empty promenade", not "no people".
+- For style, describe attributes such as palette, stroke, and texture instead of naming an artwork.
+- For text, quote it, say where it goes, and describe the type.
+- In edits, say what must stay. In Black Forest Labs' words, "reference images anchor content, they do not lock structure". Refer to inputs by order ("the first image"). Klein itself takes up to 10 references, but this CLI sends four plus a source.
+- For layout, use `flux3-klein-raw` and append a JSON list to the caption. Each box is `[top, left, bottom, right]` on a 0-1000 grid, tied to an element tagged `<id>` in the caption: `[{"id":"key_1","bbox":[150,150,850,850],"desc":"a copper key"}]`. Two simple shapes landed within a few pixels of their boxes in a test, but boxes aren't hard masks, so check the result.
+
+**Options:** `--quality` runs `low` 4, `medium` 8, or `high` and `auto` 16 steps. Use `low` for drafts and 16 for finals. Sizes round to multiples of 16 with edges from 256 to 2048. `auto` means 1024x1024 for text-to-image and the first input's aspect at about one megapixel for edits.
+
+Sources: [model card](https://huggingface.co/black-forest-labs/flux-3-image-klein) and [Klein documentation](https://docs.bfl.ai/flux_3/flux3_image_klein), the only Klein-specific guidance Black Forest Labs publishes; [bounding boxes](https://docs.bfl.ai/flux_3/flux3_image_bounding_boxes); and the general [prompting guide](https://docs.bfl.ai/guides/prompting_summary.md), written for FLUX 3 Image and not stated to cover Klein.

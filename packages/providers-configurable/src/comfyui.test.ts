@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { ComfyUIImageProvider } from "./comfyui.js";
-import { validateProfile } from "./profiles.js";
+import { fillWorkflow, loadWorkflow } from "./comfyui-workflow.js";
+import { validateProfile, type EndpointProfile } from "./profiles.js";
 type Workflow = Record<
   string,
   { class_type: string; inputs: Record<string, unknown> }
@@ -10,6 +14,7 @@ const profile = validateProfile({
   name: "local",
   api: "comfyui",
   baseUrl: "http://127.0.0.1:8188/",
+  model: "flux3-klein",
 });
 const INPUTS: Record<string, string> = {
   UNETLoader: "unet_name",
@@ -35,6 +40,8 @@ interface Server {
   promptStatus?: number;
   pending?: boolean;
   timeoutSeconds?: number;
+  profile?: EndpointProfile;
+  unknownNodes?: string[];
 }
 async function comfy(server: Server = {}) {
   const image = server.image ?? (await png());
@@ -48,6 +55,7 @@ async function comfy(server: Server = {}) {
     paths.push(`${url.pathname}${url.search}`);
     if (url.pathname.startsWith("/object_info/")) {
       const node = url.pathname.split("/").pop() ?? "";
+      if (server.unknownNodes?.includes(node)) return Response.json({});
       const files = (server.weights ?? ALL_WEIGHTS)[node] ?? [];
       return Response.json({
         [node]: {
@@ -102,7 +110,7 @@ async function comfy(server: Server = {}) {
     prompts,
     uploads,
     paths,
-    provider: new ComfyUIImageProvider(profile, {
+    provider: new ComfyUIImageProvider(server.profile ?? profile, {
       fetchImpl,
       pollIntervalMs: 0,
       timeoutSeconds: server.timeoutSeconds,
@@ -299,9 +307,12 @@ describe("ComfyUI FLUX 3 Klein provider", () => {
         mask: { data, contentType: "image/png" },
       }),
     ).rejects.toMatchObject({ kind: "usage" });
-    await expect(
-      provider.generate({ ...request, model: "flux3-klein-base" }),
-    ).rejects.toMatchObject({ kind: "usage" });
+    const unknownModel = provider.generate({
+      ...request,
+      model: "flux3-klein-base",
+    });
+    await expect(unknownModel).rejects.toMatchObject({ kind: "usage" });
+    await expect(unknownModel).rejects.toThrow("--workflow");
     await expect(
       provider.generate({ ...request, count: 5 }),
     ).rejects.toMatchObject({ kind: "usage" });
@@ -353,6 +364,17 @@ describe("ComfyUI FLUX 3 Klein provider", () => {
       "ComfyUI is not reachable at http://127.0.0.1:8188.",
     );
     await expect(provider.models()).rejects.toThrow("not reachable");
+    const configured = new ComfyUIImageProvider(
+      { ...profile, startCommand: "start-comfy --port 8188" },
+      {
+        fetchImpl: async () => {
+          throw new TypeError("fetch failed");
+        },
+      },
+    );
+    await expect(configured.generate(request)).rejects.toThrow(
+      "Start it with `start-comfy --port 8188` and retry.",
+    );
   });
   it("reports the failing node, bounded, with a hint for GPU memory", async () => {
     const { provider } = await comfy({
@@ -386,7 +408,7 @@ describe("ComfyUI FLUX 3 Klein provider", () => {
     const { provider } = await comfy({ promptStatus: 400 });
     const failure = await provider.generate(request).catch((e: Error) => e);
     expect(failure).toMatchObject({ kind: "server", statusCode: 400 });
-    expect((failure as Error).message).toContain("v0.44");
+    expect((failure as Error).message).toContain("flux3-klein workflow");
     expect((failure as Error).message).not.toContain("raw diagnostic");
   });
   it("classifies jobs without images and invalid image bytes", async () => {
@@ -408,7 +430,273 @@ describe("ComfyUI FLUX 3 Klein provider", () => {
     });
   });
 });
+describe("ComfyUI workflow files", () => {
+  const text = {
+    loader: {
+      class_type: "UNETLoader",
+      inputs: { unet_name: "other.safetensors" },
+    },
+    encode: {
+      class_type: "CLIPTextEncode",
+      inputs: { text: "pixel art, {{prompt}}", clip: ["loader", 0] },
+    },
+    latent: {
+      class_type: "EmptyLatentImage",
+      inputs: { width: "{{width}}", height: "{{height}}", batch_size: 1 },
+    },
+    sampler: {
+      class_type: "KSampler",
+      inputs: { seed: "{{seed}}", steps: 20, latent_image: ["latent", 0] },
+    },
+    save: { class_type: "SaveImage", inputs: { images: ["sampler", 0] } },
+  };
+  const edit = {
+    ...text,
+    source: { class_type: "LoadImage", inputs: { image: "{{image1}}" } },
+  };
+  const fixed = {
+    encode: text.encode,
+    sampler: text.sampler,
+    latent: {
+      class_type: "EmptyLatentImage",
+      inputs: { width: 512, height: 512 },
+    },
+  };
+  const weights = { UNETLoader: ["other.safetensors"] };
+  const history = {
+    status: { status_str: "success", completed: true },
+    outputs: {
+      note: { text: ["not an image"] },
+      save: { images: [{ filename: "out.png", type: "output" }] },
+    },
+  };
+  let dir: string;
+  const file = async (name: string, value: unknown) => {
+    const path = join(dir, name);
+    await writeFile(path, JSON.stringify(value));
+    return path;
+  };
+  const workflowProfile = (fields: Partial<EndpointProfile>) =>
+    validateProfile({ ...profile, model: "my-model", ...fields });
+  const data = () => png();
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), "imagegen-comfy-"));
+  });
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+  it("fills tokens, keeps their types, and reports the profile's label", async () => {
+    const { provider, prompts, paths } = await comfy({
+      weights,
+      history,
+      profile: workflowProfile({ workflow: await file("text.json", text) }),
+    });
+    const result = await provider.generate({ ...request, size: "landscape" });
+    const [graph] = prompts;
+    expect(graph.encode.inputs).toEqual({
+      text: "pixel art, a red cube",
+      clip: ["loader", 0],
+    });
+    expect(graph.latent.inputs).toEqual({
+      width: 1536,
+      height: 1024,
+      batch_size: 1,
+    });
+    expect(graph.sampler.inputs.seed).toEqual(expect.any(Number));
+    expect(graph.sampler.inputs.steps).toBe(20);
+    expect(paths).toContain("/view?filename=out.png&subfolder=&type=output");
+    expect(result.requestedModel).toBe("my-model");
+    expect(result.images[0]).toMatchObject({
+      prompt: "a red cube",
+      servedModel: "my-model",
+      usage: { served: { seed: graph.sampler.inputs.seed } },
+    });
+  });
+  it("defaults to a square, or to the first input's shape when editing", async () => {
+    const { provider, prompts, uploads } = await comfy({
+      weights,
+      history,
+      profile: workflowProfile({
+        workflow: await file("square.json", text),
+        editWorkflow: await file("edit.json", edit),
+      }),
+    });
+    await provider.generate(request);
+    expect(prompts[0].latent.inputs).toMatchObject({
+      width: 1024,
+      height: 1024,
+    });
+    await provider.edit({
+      ...request,
+      sourceImage: { data: await data(), contentType: "image/png" },
+    });
+    expect(prompts[1].latent.inputs).toMatchObject({ width: 1184, height: 880 });
+    expect(prompts[1].source.inputs.image).toBe(
+      `${uploads[0].file.name} [temp]`,
+    );
+  });
+  it("keeps alpha from a workflow that outputs it", async () => {
+    const image = await sharp({
+      create: {
+        width: 8,
+        height: 6,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const { provider } = await comfy({
+      weights,
+      history,
+      image,
+      profile: workflowProfile({ workflow: await file("alpha.json", text) }),
+    });
+    const [result] = (await provider.generate(request)).images;
+    expect((await sharp(result.data).metadata()).hasAlpha).toBe(true);
+  });
+  it("substitutes prompts literally", async () => {
+    const workflow = await loadWorkflow(await file("literal.json", text));
+    const graph = fillWorkflow(workflow, {
+      prompt: "{{seed}} costs $& today",
+      seed: 7,
+      size: { width: 256, height: 256 },
+      images: [],
+    });
+    expect(graph.encode.inputs.text).toBe(
+      "pixel art, {{seed}} costs $& today",
+    );
+  });
+  it("rejects requests the workflow files cannot honor, before contacting ComfyUI", async () => {
+    const { provider, paths } = await comfy({
+      weights,
+      profile: workflowProfile({
+        workflow: await file("fixed.json", fixed),
+      }),
+    });
+    const source = { data: await data(), contentType: "image/png" as const };
+    const rejected: [() => Promise<unknown>, string][] = [
+      [() => provider.generate({ ...request, model: "other" }), "my-model"],
+      [
+        () => provider.generate({ ...request, quality: "high" }),
+        "--quality auto",
+      ],
+      [() => provider.generate({ ...request, size: "wide" }), "--size auto"],
+      [
+        () => provider.edit({ ...request, sourceImage: source }),
+        "--edit-workflow",
+      ],
+    ];
+    for (const [call, message] of rejected) {
+      const failure = call();
+      await expect(failure).rejects.toMatchObject({ kind: "usage" });
+      await expect(failure).rejects.toThrow(message);
+    }
+    const editOnly = await comfy({
+      profile: workflowProfile({
+        editWorkflow: await file("only-edit.json", edit),
+      }),
+    });
+    await expect(editOnly.provider.generate(request)).rejects.toThrow(
+      "no --workflow",
+    );
+    await expect(
+      editOnly.provider.edit({
+        ...request,
+        sourceImage: source,
+        referenceImages: [source],
+      }),
+    ).rejects.toThrow("takes 1 input images, but the request has 2");
+    expect([...paths, ...editOnly.paths]).toEqual([]);
+  });
+  it("rejects malformed workflow files with the reason", async () => {
+    const bad = (mutate: Record<string, unknown>) => ({ ...text, ...mutate });
+    const cases: [unknown, string][] = [
+      [{ nodes: [], links: [] }, "API format"],
+      [[], "API format"],
+      [
+        bad({ extra: { class_type: "X", inputs: { a: "{{cfg}}" } } }),
+        "unknown tokens: cfg",
+      ],
+      [{ encode: text.encode }, "{{prompt}} and {{seed}}"],
+      [
+        bad({ latent: { class_type: "L", inputs: { width: "{{width}}" } } }),
+        "{{width}} and {{height}} together",
+      ],
+      [
+        bad({ source: { class_type: "L", inputs: { image: "{{image2}}" } } }),
+        "from {{image1}}",
+      ],
+    ];
+    for (const [i, [value, message]] of cases.entries())
+      await expect(
+        loadWorkflow(await file(`bad-${i}.json`, value)),
+      ).rejects.toThrow(message);
+    await expect(loadWorkflow(join(dir, "absent.json"))).rejects.toMatchObject({
+      kind: "configuration",
+    });
+  });
+  it("names missing nodes and files instead of queueing a doomed job", async () => {
+    const { provider, paths } = await comfy({
+      weights: { UNETLoader: ["different.safetensors"] },
+      unknownNodes: ["SaveImage"],
+      profile: workflowProfile({ workflow: await file("needs.json", text) }),
+    });
+    const failure = provider.generate(request);
+    await expect(failure).rejects.toMatchObject({ kind: "configuration" });
+    await expect(failure).rejects.toThrow(
+      "other.safetensors for UNETLoader.unet_name, node type SaveImage",
+    );
+    expect(paths).not.toContain("/prompt");
+    await expect(provider.models()).rejects.toMatchObject({
+      kind: "configuration",
+    });
+  });
+  it("lists the label once everything the files need is installed", async () => {
+    const { provider } = await comfy({
+      weights,
+      profile: workflowProfile({ workflow: await file("list.json", text) }),
+    });
+    expect(await provider.models()).toMatchObject([
+      {
+        id: "my-model",
+        inputModalities: ["text"],
+        outputModalities: ["image"],
+      },
+    ]);
+  });
+});
 describe("ComfyUI profiles", () => {
+  it("requires a model and keeps server fields to comfyui", () => {
+    const base = {
+      name: "local",
+      api: "comfyui",
+      baseUrl: "http://127.0.0.1:8188",
+    };
+    expect(() => validateProfile(base)).toThrow("need --model");
+    const absolute = join(tmpdir(), "workflow.json");
+    expect(
+      validateProfile({
+        ...base,
+        model: "my-model",
+        startCommand: " start-comfy ",
+        workflow: absolute,
+      }),
+    ).toMatchObject({ startCommand: "start-comfy", workflow: absolute });
+    expect(() =>
+      validateProfile({ ...base, model: "m", workflow: "relative.json" }),
+    ).toThrow("absolute path");
+    expect(() =>
+      validateProfile({ ...base, model: "m", startCommand: " " }),
+    ).toThrow("must not be blank");
+    expect(() =>
+      validateProfile({
+        name: "cloud",
+        api: "openrouter",
+        startCommand: "start-comfy",
+      }),
+    ).toThrow("only to comfyui");
+  });
   it("defaults to no authentication and refuses API keys", () => {
     expect(profile.auth).toBe("none");
     expect(profile.baseUrl).toBe("http://127.0.0.1:8188");
@@ -417,6 +705,7 @@ describe("ComfyUI profiles", () => {
         name: "local",
         api: "comfyui",
         baseUrl: "http://127.0.0.1:8188",
+        model: "flux3-klein",
         auth: "bearer",
       }),
     ).toThrow("do not use API keys");

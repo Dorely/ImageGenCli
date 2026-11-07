@@ -63,7 +63,7 @@ function parseArgs(argv: string[]): { flags: Map<string, string | boolean | stri
     }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "api", "base-url", "auth", "key-stdin", "no-open", "show-path", "target", "force"].includes(key)) {
+      if (!["prompt", "out", "provider", "model", "reference", "size", "quality", "format", "count", "source", "mask", "timeout", "api", "base-url", "auth", "start-command", "workflow", "edit-workflow", "key-stdin", "no-open", "show-path", "target", "force"].includes(key)) {
         fail("usage", `Unknown option --${key}. Run imagegen help.`, EXIT_USAGE);
       }
       if (key === "key-stdin" || key === "no-open" || key === "show-path" || key === "force") {
@@ -492,8 +492,11 @@ async function main(): Promise<void> {
       else if (sub === "remove") { await repository.remove(subSub); process.stdout.write(`${JSON.stringify({ provider: subSub, status: "removed" })}\n`); }
       else if (sub === "add" || sub === "update") {
         const patch: Record<string, string> = {};
-        for (const [flag, key] of [["api", "api"], ["base-url", "baseUrl"], ["auth", "auth"], ["model", "model"]]) {
+        for (const [flag, key] of [["api", "api"], ["base-url", "baseUrl"], ["auth", "auth"], ["model", "model"], ["start-command", "startCommand"]]) {
           const value = flagValue(flags, flag); if (value !== undefined) patch[key] = value;
+        }
+        for (const [flag, key] of [["workflow", "workflow"], ["edit-workflow", "editWorkflow"]]) {
+          const value = flagValue(flags, flag); if (value !== undefined) patch[key] = resolve(value);
         }
         const profile = sub === "add" ? await repository.add({ name: subSub, ...patch }) : await repository.update(subSub, patch as Partial<EndpointProfile>);
         process.stdout.write(`${JSON.stringify({ provider: profile })}\n`);

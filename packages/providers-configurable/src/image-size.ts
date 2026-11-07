@@ -37,3 +37,20 @@ export function imageSize(
       : "Use WIDTHxHEIGHT, an aspect ratio, preset, or auto.",
   );
 }
+export function comfySize(
+  value: string | undefined,
+): { width: number; height: number } | undefined {
+  const fields = imageSize(value, "comfyui");
+  let width: number, height: number;
+  if (fields.aspect_ratio) {
+    const [w, h] = fields.aspect_ratio.split(":").map(Number);
+    const scale = Math.sqrt((1024 * 1024) / (w * h));
+    [width, height] = [w * scale, h * scale];
+  } else if (fields.size) [width, height] = fields.size.split("x").map(Number);
+  else return undefined;
+  width = Math.round(width / 16) * 16;
+  height = Math.round(height / 16) * 16;
+  if (Math.min(width, height) < 256 || Math.max(width, height) > 2048)
+    throw usage("ComfyUI image edges must be from 256 to 2048 pixels.");
+  return { width, height };
+}

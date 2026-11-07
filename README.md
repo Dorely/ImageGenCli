@@ -62,7 +62,7 @@ Codex login starts a temporary server on `localhost:1455`, opens the browser for
 
 ## Agent skill
 
-`imagegen skill` prints a reusable `SKILL.md` from the installed npm package. The skill covers generation, edits, provider setup, JSON results, model selection, and native alpha transparency with verification. It works as plain instructions in any agent harness that can run a shell command.
+`imagegen skill` prints a reusable `SKILL.md` from the installed npm package. The skill covers generation, edits, provider setup, local model setup and server handling, JSON results, model selection, and native alpha transparency with verification. It works as plain instructions in any agent harness that can run a shell command.
 
 For Claude Code across all projects, add this to `~/.claude/CLAUDE.md` (on Windows, `%USERPROFILE%\.claude\CLAUDE.md`):
 
@@ -157,7 +157,7 @@ Each count item is a separate request returning its last final image. Calls use 
 
 ## Named image API endpoints
 
-Save a profile for OpenRouter or a gateway using the OpenAI Images API format, or for [FLUX 3 Image Klein on your own GPU](#local-flux-3-image-klein-through-comfyui):
+Save a profile for OpenRouter or a gateway using the OpenAI Images API format, or for [a model on your own GPU](#local-image-models-through-comfyui):
 
 ```sh
 imagegen providers add openrouter --api openrouter --model <image-model-id>
@@ -180,36 +180,96 @@ Portable flags retain their existing meaning, with model-specific limits. OpenRo
 
 References go through OpenRouter `input_references` or OpenAI multipart edits. Editing keeps source first, followed by references. Masks are available only for OpenAI Images-compatible endpoints that implement them. Four references, an additional edit source, and counts from one to four are supported by the CLI; a particular model may accept less. Count invokes separate single-image requests; there are no automatic paid retries, model substitutions, conversational sessions, or arbitrary request templates. Requests and image downloads share a 180-second timeout per count item. See [API compatibility research](docs/configurable-api-research.md) and the packaged skill for provider/model selection.
 
-### Local FLUX 3 Image Klein through ComfyUI
+### Local image models through ComfyUI
 
-`--api comfyui` runs FLUX 3 Image Klein on your own GPU through a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) v0.44 or later server, without its UI. The int8 weights are built for GPUs with 8 GB or more of VRAM. The CLI does not start or stop the server.
+`--api comfyui` runs an image model on your own GPU through a headless [ComfyUI](https://github.com/comfyanonymous/ComfyUI) server, with no key or per-image cost. A profile, by convention `local-comfy`, holds what is fixed at configuration time: the server URL, the model, the command that starts the server, and any workflow files.
 
-1. Accept the [FLUX Kommunity License](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy), which limits commercial output to qualifying users and sets its own conditions on distribution and on training other models. Then run `hf auth login`.
-2. Download the distilled weights (about 18 GB) into ComfyUI's model folder:
+#### Setup
 
-   ```sh
-   hf download black-forest-labs/flux-3-image-klein-comfy \
-     diffusion_models/flux3-image-klein-int8-convrot.safetensors \
-     text_encoders/qwen3vl_4b_int8_convrot.safetensors \
-     text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors \
-     vae/flux2-vae.safetensors \
-     --local-dir ComfyUI/models
-   ```
+These steps fit any model that runs in ComfyUI.
 
-3. Start the API with `python main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch`, then add a profile:
+1. Check your GPU memory and free disk against the model's requirements, and read its license. Many local models restrict commercial use.
+2. Install ComfyUI from a [release tag](https://github.com/comfyanonymous/ComfyUI/releases), with PyTorch for your GPU from the [selector](https://pytorch.org/get-started/locally/) installed first. Check which ComfyUI version the model needs. On Linux and macOS, use `.venv/bin/python`.
 
    ```sh
-   imagegen providers add klein --api comfyui --base-url http://127.0.0.1:8188
-   imagegen generate --provider klein --prompt "A lighthouse at dawn" --size wide --out ./lighthouse.png
-   imagegen edit --provider klein --source ./lighthouse.png --prompt "Make it a stormy night" --out ./storm.png
+   git clone --depth 1 --branch <release-tag> https://github.com/comfyanonymous/ComfyUI.git <comfy-dir>
+   cd <comfy-dir>
+   python -m venv .venv
+   .venv/Scripts/python -m pip install torch torchvision --index-url <pytorch-index-for-your-gpu>
+   .venv/Scripts/python -m pip install -r requirements.txt
    ```
 
-ComfyUI profiles need no key and offer two models, and `models --provider <name>` lists those whose weights are installed:
+3. Download the weights into the folders the model's documentation names under `<comfy-dir>/models/`, usually `checkpoints`, `diffusion_models`, `text_encoders`, or `vae`. For a gated repository, accept its license in your browser and run `hf auth login`.
+4. Write a start script that keeps the server on loopback, because ComfyUI has no authentication:
 
-- `flux3-klein` (default) expands the prompt with Black Forest Labs' upsampler, as they recommend for every request. The JSON `prompt` field reports the caption that was rendered.
+   ```sh
+   <comfy-dir>/.venv/Scripts/python <comfy-dir>/main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch
+   ```
+
+5. Save the profile. `--model` is a [built-in graph's ID](#flux-3-image-klein), or your own name for a model driven by [workflow files](#workflow-files). Use full paths in the start command.
+
+   ```sh
+   imagegen providers add local-comfy --api comfyui --base-url http://127.0.0.1:8188 --model <id-or-name> --start-command "<command that runs the script>" [--workflow <text-to-image.json>] [--edit-workflow <edit.json>]
+   ```
+
+6. Start the server, then check the profile with one image:
+
+   ```sh
+   imagegen models --provider local-comfy
+   imagegen generate --provider local-comfy --prompt "A lighthouse at dawn" --size wide --out ./lighthouse.png
+   ```
+
+#### Daily use
+
+The CLI never starts or stops the server, and generating needs it running. Run the profile's start command first (`imagegen providers show local-comfy` prints it), generate through `--provider local-comfy`, then stop the server, which keeps holding GPU memory until you do. If the server is down, the error quotes the saved command. The [packaged skill](apps/cli/skill/SKILL.md) tells agents to do this themselves: start the server when it isn't reachable, wait for it, and stop it when finished if they started it.
+
+`models --provider local-comfy` doubles as a health check, listing a model only when the server has everything it needs. Masks are rejected. Sizes accept presets, pixels, or aspect ratios (about one megapixel), are rounded to multiples of 16, and need edges from 256 to 2048 pixels. `auto` means 1024x1024 for text-to-image, and the first input's aspect at about one megapixel for edits. Count runs separate jobs with new seeds, reported under `served`. Each job has a 600-second timeout. Files are re-encoded so ComfyUI's embedded workflow never reaches the output.
+
+#### Workflow files
+
+For a model without a built-in graph, save its ComfyUI graph in API format and replace the values the CLI controls with tokens. `--workflow` handles requests with no input images, and `--edit-workflow` handles the rest. You can export API JSON from the model's template at the server's URL, or write it by hand from the node definitions at `<base-url>/object_info/<NodeClass>`.
+
+```json
+{
+  "loader": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "my-model.safetensors" } },
+  "positive": { "class_type": "CLIPTextEncode", "inputs": { "text": "{{prompt}}", "clip": ["loader", 1] } },
+  "negative": { "class_type": "CLIPTextEncode", "inputs": { "text": "", "clip": ["loader", 1] } },
+  "latent": { "class_type": "EmptyLatentImage", "inputs": { "width": "{{width}}", "height": "{{height}}", "batch_size": 1 } },
+  "sampler": { "class_type": "KSampler", "inputs": { "model": ["loader", 0], "positive": ["positive", 0], "negative": ["negative", 0], "latent_image": ["latent", 0], "seed": "{{seed}}", "steps": 20, "cfg": 7, "sampler_name": "euler", "scheduler": "normal", "denoise": 1 } },
+  "decode": { "class_type": "VAEDecode", "inputs": { "samples": ["sampler", 0], "vae": ["loader", 2] } },
+  "output": { "class_type": "PreviewImage", "inputs": { "images": ["decode", 0] } }
+}
+```
+
+| Token | Required | Value |
+|---|---|---|
+| `{{prompt}}` | Yes | The `--prompt` text, used literally. |
+| `{{seed}}` | Yes | A new random seed for each `--count` image. |
+| `{{width}}`, `{{height}}` | Together, if at all | `--size` rounded to multiples of 16. Without them, `--size` is rejected. |
+| `{{image1}}`, `{{image2}}`, ... | Edit workflows | Uploaded inputs for `LoadImage`, in order: the source, then references. The request must supply exactly this many. |
+
+A value that is only a token keeps its type, so seeds and sizes stay numbers. Sampling lives in the file, so only `--quality auto` applies, and `--model` must match the profile. Before queueing, the CLI checks that each node type and listed file exists on the server and names any that are missing. It saves the first image of the first output node that returned one, keeping alpha if the graph outputs it. Moving a profile back to a built-in graph takes `providers remove` and a new `providers add`.
+
+#### FLUX 3 Image Klein
+
+Black Forest Labs' FLUX 3 Image Klein has a built-in graph. It needs ComfyUI v0.44 or later, and its int8 weights are built for GPUs with 8 GB or more of VRAM. Accept the [FLUX Kommunity License](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy), which limits commercial output to qualifying users and sets its own conditions on distribution and on training other models, then download about 18 GB:
+
+```sh
+hf download black-forest-labs/flux-3-image-klein-comfy \
+  diffusion_models/flux3-image-klein-int8-convrot.safetensors \
+  text_encoders/qwen3vl_4b_int8_convrot.safetensors \
+  text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors \
+  vae/flux2-vae.safetensors \
+  --local-dir <comfy-dir>/models
+imagegen providers add local-comfy --api comfyui --base-url http://127.0.0.1:8188 --model flux3-klein --start-command "<command that runs the script>"
+```
+
+- `flux3-klein` expands the prompt with Black Forest Labs' upsampler, as they recommend for every request. The JSON `prompt` field reports the caption that was rendered.
 - `flux3-klein-raw` uses the prompt verbatim as the full scene caption and doesn't need the upsampler weights. Short prompts give generic results.
 
-`--quality` selects steps: `low` 4, `medium` 8, `high` or `auto` 16. Sizes accept presets, pixels, or aspect ratios (about one megapixel), are rounded to multiples of 16, and need edges from 256 to 2048 pixels. `auto` means 1024x1024 for text-to-image; edits follow the first reference's shape at about one megapixel. Masks are rejected. Count runs separate jobs with new seeds, reported under `served` with the step count. Each job has a 600-second timeout. Files are re-encoded so ComfyUI's embedded workflow never reaches the output.
+`--model` picks between them on a Klein profile, and `--quality` selects steps: `low` 4, `medium` 8, `high` or `auto` 16.
+
+Klein has no native transparency: Black Forest Labs doesn't claim it, and its VAE decodes three channels. See the [packaged skill](apps/cli/skill/SKILL.md) for when to choose it and how to prompt it, and the [research notes](docs/configurable-api-research.md) for the evidence.
 
 ### Diagnosing gateway errors
 

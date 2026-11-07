@@ -2,12 +2,8 @@ import {
   FLUX3_KLEIN_EDIT_PROMPT,
   FLUX3_KLEIN_GENERATE_PROMPT,
 } from "./flux3-klein-prompts.js";
-import { imageSize } from "./image-size.js";
+import type { ComfyGraph, ComfyNode } from "./comfyui-workflow.js";
 import { usage } from "./profiles.js";
-export interface ComfyNode {
-  class_type: string;
-  inputs: Record<string, unknown>;
-}
 export interface Flux3KleinModel {
   id: string;
   name: string;
@@ -74,7 +70,7 @@ export function flux3KleinModel(id: string): Flux3KleinModel {
   const model = FLUX3_KLEIN_MODELS.find((m) => m.id === id);
   if (!model)
     throw usage(
-      `ComfyUI profiles support ${FLUX3_KLEIN_MODELS.map((m) => m.id).join(" and ")}.`,
+      `Built-in ComfyUI models are ${FLUX3_KLEIN_MODELS.map((m) => m.id).join(" and ")}. Add --workflow to the profile for any other model.`,
     );
   return model;
 }
@@ -83,23 +79,6 @@ export function flux3KleinSteps(quality: string | undefined): number {
   const steps = STEPS[(quality ?? "auto").trim().toLowerCase()];
   if (!steps) throw usage("Quality must be low, medium, high, or auto.");
   return steps;
-}
-export function flux3KleinSize(
-  value: string | undefined,
-): Flux3KleinJob["size"] {
-  const fields = imageSize(value, "comfyui");
-  let width: number, height: number;
-  if (fields.aspect_ratio) {
-    const [w, h] = fields.aspect_ratio.split(":").map(Number);
-    const scale = Math.sqrt((1024 * 1024) / (w * h));
-    [width, height] = [w * scale, h * scale];
-  } else if (fields.size) [width, height] = fields.size.split("x").map(Number);
-  else return undefined;
-  width = Math.round(width / 16) * 16;
-  height = Math.round(height / 16) * 16;
-  if (Math.min(width, height) < 256 || Math.max(width, height) > 2048)
-    throw usage("FLUX 3 Klein image edges must be from 256 to 2048 pixels.");
-  return { width, height };
 }
 // The generate instructions accept a leading canvas line, which keeps wide and
 // tall compositions from being planned as squares.
@@ -113,9 +92,7 @@ function upsamplerRequest(job: Flux3KleinJob): string {
 }
 // Mirrors Comfy's distilled Klein templates in API format, with the upsampler
 // settings they ship. Node ids are stable so the provider can read outputs back.
-export function flux3KleinWorkflow(
-  job: Flux3KleinJob,
-): Record<string, ComfyNode> {
+export function flux3KleinWorkflow(job: Flux3KleinJob): ComfyGraph {
   const editing = job.images.length > 0;
   const nodes: Record<string, ComfyNode> = {
     model: {

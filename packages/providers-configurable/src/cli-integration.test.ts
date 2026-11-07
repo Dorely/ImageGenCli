@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -157,8 +157,15 @@ describe("endpoint CLI", () => {
       "comfyui",
       "--base-url",
       "http://127.0.0.1:8188",
+      "--model",
+      "flux3-klein",
+      "--start-command",
+      "start-comfy --port 8188",
     ]);
-    expect(added.provider.auth).toBe("none");
+    expect(added.provider).toMatchObject({
+      auth: "none",
+      startCommand: "start-comfy --port 8188",
+    });
     const data = await sharp({
       create: { width: 4, height: 3, channels: 3, background: "blue" },
     })
@@ -242,6 +249,39 @@ describe("endpoint CLI", () => {
     ).rejects.toThrow();
     expect(state.exits[0]).toBe(2);
     expect(stderr).toContain("no mask input");
+  });
+  it("saves ComfyUI workflow paths as absolute and requires a model", async () => {
+    const add = ["providers", "add", "local", "--api", "comfyui"];
+    const url = ["--base-url", "http://127.0.0.1:8188"];
+    await expect(run([...add, ...url])).rejects.toThrow();
+    expect(state.exits[0]).toBe(2);
+    expect(stderr).toContain("need --model");
+    const added = await run([
+      ...add,
+      ...url,
+      "--model",
+      "my-model",
+      "--workflow",
+      "text.json",
+      "--edit-workflow",
+      "edit.json",
+    ]);
+    expect(added.provider).toMatchObject({
+      model: "my-model",
+      workflow: resolve("text.json"),
+      editWorkflow: resolve("edit.json"),
+    });
+    const updated = await run([
+      "providers",
+      "update",
+      "local",
+      "--workflow",
+      "other.json",
+    ]);
+    expect(updated.provider.workflow).toBe(resolve("other.json"));
+    expect((await run(["providers", "show", "local"])).provider).toEqual(
+      updated.provider,
+    );
   });
   it("saves actual raster bytes through generate and edit, preserving source order", async () => {
     await run([
