@@ -17,7 +17,7 @@
 - Before substantive work, run `git status --short --branch` and start from a clean, committed working tree.
 - If existing changes are present, inspect and preserve them. Commit them as a clearly named checkpoint when their intent is understood; otherwise ask the user before proceeding. Never discard or overwrite unrelated work.
 - Keep commits focused on the completed task and do not rewrite existing history unless the user explicitly asks.
-- After completing and verifying a task, commit all task-related changes and leave the working tree clean. Push only when the user asks to publish or synchronize the work.
+- After completing and verifying a task, commit all task-related changes, push the branch to `origin` without asking, and leave the working tree clean. Releases (version tags, GitHub Releases, npm publishing) still happen only when the user asks.
 
 ## Tech Stack
 - Package manager: npm workspaces.
