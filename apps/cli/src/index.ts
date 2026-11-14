@@ -32,7 +32,8 @@ import { ProfileRepository, createProfileEntry, createProfileProvider, profileSt
 import { readApiKey } from "./key-input.js";
 import { helpFor } from "./help.js";
 import { installSkill, SkillExistsError, skillText } from "./skill.js";
-import { appendUsageLog, USAGE_LOG_ENV, usageLogEntry } from "./usage-log.js";
+import { appendUsageLog, usageLogEntry } from "./usage-log.js";
+import { configPath, configView, loadConfig, parseConfigKey, setConfig, unsetConfig } from "./config.js";
 
 const EXIT_USAGE = 2;
 const EXIT_AUTH = 3;
@@ -103,22 +104,6 @@ function imageModel(flags: Map<string, string | boolean | string[]>): string | u
 async function cliVersion(): Promise<string> {
   const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
   return manifest.version;
-}
-
-function redirectUri(): string {
-  return process.env["IMAGEGEN_CODEX_REDIRECT_URI"] ?? DEFAULT_REDIRECT_URI;
-}
-
-function redirectPort(uri: string): number {
-  try {
-    const parsed = new URL(uri);
-    if (parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
-      fail("usage", "Custom redirect URI must use localhost.", EXIT_USAGE);
-    }
-    return parsed.port ? Number(parsed.port) : LOOPBACK_PORT;
-  } catch {
-    fail("usage", "IMAGEGEN_CODEX_REDIRECT_URI is not a valid URL.", EXIT_USAGE);
-  }
 }
 
 async function loadImageInput(path: string, label: string): Promise<ImageInput> {
@@ -292,15 +277,13 @@ async function runAuthLogin(providerName: string, flags: Map<string, string | bo
   if (providerName !== PROVIDER_NAME) {
     fail("usage", `Unknown auth provider "${providerName}". Available: ${(await registry()).describe()}.`, EXIT_USAGE);
   }
-  const uri = redirectUri();
-  const port = redirectPort(uri);
   const timeoutMinutes = Number(flagValue(flags, "timeout") ?? "10");
   if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0 || timeoutMinutes > 60) {
     fail("usage", "--timeout must be a number of minutes from 1 to 60.", EXIT_USAGE);
   }
-  const { url, state } = startPkceFlow(uri);
+  const { url, state } = startPkceFlow(DEFAULT_REDIRECT_URI);
   let callback: { code: string; state: string };
-  const waiter = waitForOAuthCallback(timeoutMinutes * 60 * 1000, port);
+  const waiter = waitForOAuthCallback(timeoutMinutes * 60 * 1000, LOOPBACK_PORT);
   if (!flags.get("no-open")) {
     try {
       const { default: open } = await import("open");
@@ -325,7 +308,7 @@ async function runAuthLogin(providerName: string, flags: Map<string, string | bo
   }
   const manager = new CodexTokenManager(store);
   try {
-    await manager.exchangeAndSave({ code: callback.code, redirectUri: uri, codeVerifier: verifier });
+    await manager.exchangeAndSave({ code: callback.code, redirectUri: DEFAULT_REDIRECT_URI, codeVerifier: verifier });
   } catch (error) {
     if (error instanceof ReauthRequiredError) fail("auth", error.message, EXIT_AUTH);
     throw error;
@@ -421,6 +404,8 @@ async function runEdit(flags: Map<string, string | boolean | string[]>): Promise
 }
 
 async function runImageRequest(request: GenerateRequest, edit: EditRequest | undefined, providers: ProviderEntry[]): Promise<void> {
+  // Read settings before any provider request so a broken config fails without spending.
+  const { usageLog } = await loadConfig();
   const multiProvider = providers.length > 1;
   for (const entry of providers) {
     let result: ProviderResult;
@@ -438,13 +423,38 @@ async function runImageRequest(request: GenerateRequest, edit: EditRequest | und
     const paths = await resolveOutPaths(request.out, entry.provider.name, multiProvider, result.images.length, request.format ?? "png");
     await saveImages(result, paths);
     printResult(entry.provider.name, result, paths);
+    if (!usageLog) continue;
     try {
-      await appendUsageLog(usageLogEntry(request, edit, result, paths));
+      await appendUsageLog(usageLog, usageLogEntry(request, edit, result, paths));
     } catch {
       // Images are already saved and reported; a log failure must not change the result.
-      process.stderr.write(`${JSON.stringify({ warning: { kind: "io", message: `Could not append to ${USAGE_LOG_ENV} file.` } })}\n`);
+      process.stderr.write(`${JSON.stringify({ warning: { kind: "io", message: "Could not append to the usage log file." } })}\n`);
     }
   }
+}
+
+async function runConfig(args: string[]): Promise<void> {
+  const [action, key, value] = args;
+  if (action === undefined) {
+    process.stdout.write(`${JSON.stringify({ config: configView(await loadConfig()), location: configPath() })}\n`);
+    return;
+  }
+  if (action === "get" && args.length === 2) {
+    const name = parseConfigKey(key);
+    process.stdout.write(`${JSON.stringify({ key: name, value: configView(await loadConfig())[name] })}\n`);
+    return;
+  }
+  if (action === "set" && args.length === 3) {
+    const name = parseConfigKey(key);
+    process.stdout.write(`${JSON.stringify({ key: name, value: (await setConfig(name, value))[name] })}\n`);
+    return;
+  }
+  if (action === "unset" && args.length === 2) {
+    const name = parseConfigKey(key);
+    process.stdout.write(`${JSON.stringify({ key: name, value: (await unsetConfig(name))[name] })}\n`);
+    return;
+  }
+  fail("usage", "Usage: imagegen config [get <key> | set <key> <value> | unset <key>].", EXIT_USAGE);
 }
 
 async function main(): Promise<void> {
@@ -483,6 +493,10 @@ async function main(): Promise<void> {
         if (error instanceof SkillExistsError) fail("usage", error.message, EXIT_USAGE);
         fail("io", error instanceof Error ? error.message : String(error), EXIT_IO);
       }
+      return;
+    }
+    if (command === "config") {
+      await runConfig(positionals.slice(1));
       return;
     }
     if (command === "providers" && sub) {

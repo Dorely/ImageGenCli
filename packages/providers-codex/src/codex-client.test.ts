@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { GenerateRequest } from "@imagegencli/core";
 import { CodexImageProvider, type CodexClientOptions } from "./codex-client.js";
 import { CodexTokenManager } from "./codex-token-manager.js";
@@ -30,9 +30,6 @@ function setup(options: CodexClientOptions = {}) {
   return { provider, fetchImpl, payload, url, load };
 }
 
-beforeEach(() => vi.stubEnv("IMAGEGEN_CODEX_IMAGE_MODEL", undefined));
-afterEach(() => vi.unstubAllEnvs());
-
 describe("image model selection", () => {
   it("defaults to Flare with the prompt verbatim and auto options omitted", async () => {
     const { provider, payload, url } = setup();
@@ -50,9 +47,8 @@ describe("image model selection", () => {
     expect(payload(1).model).toBe(model);
   });
 
-  it("prioritizes request, constructor, environment, then default without leaking overrides", async () => {
-    vi.stubEnv("IMAGEGEN_CODEX_IMAGE_MODEL", models[2]);
-    expect((await setup().provider.generate(request)).requestedModel).toBe(models[2]);
+  it("prioritizes request, constructor, then default without leaking overrides", async () => {
+    expect((await setup().provider.generate(request)).requestedModel).toBe(models[0]);
     const { provider } = setup({ imageModel: models[1] });
     expect((await provider.generate({ ...request, model: models[0] })).requestedModel).toBe(models[0]);
     expect((await provider.generate(request)).requestedModel).toBe(models[1]);

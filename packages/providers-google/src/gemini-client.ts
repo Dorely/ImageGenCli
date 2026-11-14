@@ -47,7 +47,6 @@ export class GeminiImageProvider {
     const model = (
       request.model ??
       this.options.imageModel ??
-      process.env["IMAGEGEN_GEMINI_IMAGE_MODEL"] ??
       DEFAULT_IMAGE_MODEL
     ).trim();
     if (!model) throw error("usage", "Image model must not be blank.");

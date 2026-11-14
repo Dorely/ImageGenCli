@@ -1,10 +1,8 @@
 import { appendFile, mkdir } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname } from "node:path";
 import type { EditRequest, GenerateRequest, ProviderResult } from "@imagegencli/core";
 
-export const USAGE_LOG_ENV = "IMAGEGEN_USAGE_LOG";
-
-// One JSON line per provider result when IMAGEGEN_USAGE_LOG names a file.
+// One JSON line per provider result when the usage-log config setting names a file.
 // Records metering and request shape only: no prompts, image bytes, or credentials.
 export function usageLogEntry(request: GenerateRequest, edit: EditRequest | undefined, result: ProviderResult, paths: string[]): Record<string, unknown> {
   return {
@@ -32,11 +30,7 @@ export function usageLogEntry(request: GenerateRequest, edit: EditRequest | unde
   };
 }
 
-export async function appendUsageLog(entry: Record<string, unknown>): Promise<string | undefined> {
-  const target = process.env[USAGE_LOG_ENV]?.trim();
-  if (!target) return undefined;
-  const path = resolve(target);
+export async function appendUsageLog(path: string, entry: Record<string, unknown>): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await appendFile(path, `${JSON.stringify(entry)}\n`, "utf8");
-  return path;
 }

@@ -41,6 +41,9 @@ vi.mock("@imagegencli/providers-codex", async (importOriginal) => {
   };
 });
 vi.mock("@imagegencli/credentials", () => ({
+  // No config.json exists here, so the user's real CLI settings never apply.
+  defaultCredentialFilePath: () =>
+    join(tmpdir(), "imagegen-gemini-cli-no-config", "tokens.json"),
   resolveCredentialStore: async () => ({
     load: async () => (state.key ? { apiKey: state.key } : null),
     save: async (_name: string, v: { apiKey: string }) => {

@@ -51,7 +51,8 @@
 | `apps/cli/scripts/package-docs.mjs` | Prepack step copying the root README (relative links pinned to the version tag) and LICENSE into the package. |
 | `apps/cli/src/index.ts` | CLI entry point: parsing, auth, profile management, discovery, image commands, and JSON reporting. |
 | `apps/cli/src/help.ts` | Image options, profile management/discovery commands, supported provider guidance, and help examples. |
-| `apps/cli/src/usage-log.ts` | Opt-in `IMAGEGEN_USAGE_LOG` JSONL entries: request shape, dimensions, provider usage; no prompts or secrets. |
+| `apps/cli/src/config.ts` | `config.json` CLI settings next to providers.json (`usage-log`): load, validate, set, and unset for `imagegen config`. |
+| `apps/cli/src/usage-log.ts` | Usage log JSONL entries, enabled by the `usage-log` setting: request shape, dimensions, provider usage; no prompts or secrets. |
 | `apps/cli/src/skill.ts` | Loads and installs the packaged agent skill for the `imagegen skill` command. |
 | `apps/cli/skill/SKILL.md` | Packaged agent instructions for CLI use, model selection, native alpha transparency, and image verification. |
 

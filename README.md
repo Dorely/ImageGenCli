@@ -38,6 +38,7 @@ imagegen edit --prompt "add seagulls" --source ./lighthouse.png --out ./gulls.pn
 imagegen providers add <name> --api <openrouter|openai-images|comfyui> [options]
 imagegen models --provider <name>
 imagegen skill
+imagegen config
 imagegen help [command]
 imagegen --version
 ```
@@ -78,7 +79,7 @@ Codex login starts a temporary server on `localhost:1455`, opens the browser for
 | `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst` | Requested with `--model` | auto, low, medium, high, xhigh, max |
 | `gpt-image-2` | Requested with `--model` | auto, low, medium, high |
 
-These are requests, not selections: the backend currently accepts any ID and chooses what runs. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, `IMAGEGEN_CODEX_IMAGE_MODEL`, then Flare. The default is a pinned ID: Codex publishes no image-model listing to discover the latest one from. When a specific model matters, use a named profile such as OpenRouter.
+These are requests, not selections: the backend currently accepts any ID and chooses what runs. Selection precedence is request/CLI model, constructor `imageModel` override for library callers, then Flare. The default is a pinned ID: Codex publishes no image-model listing to discover the latest one from. When a specific model matters, use a named profile such as OpenRouter.
 
 Quality defaults to `auto`. Requests go straight to the Codex image endpoints (`/backend-api/codex/images/generations` and `/edits`, the ones the Codex app's own image tool uses): no orchestration model runs, the prompt reaches the image model verbatim, and usage draws on the plan's separate daily image allowance rather than the 5-hour/weekly Codex limits.
 
@@ -107,7 +108,7 @@ imagegen auth gemini logout
 
 Login accepts hidden terminal input or explicit `--key-stdin` for scripts using a secure input source. Do not put keys in command arguments. Credentials use the existing OS vault and file fallback; status indicates local configuration without validating access or making a paid request. Gemini credentials remain separate from Codex tokens.
 
-The default is `gemini-nano-banana-2.1`; override with `--model` or `IMAGEGEN_GEMINI_IMAGE_MODEL` (CLI takes precedence). Precision work can select `gemini-3-pro-image`. Existing `gemini-3.1-flash-image` and `gemini-2.5-flash-image` workflows are supported. Other model IDs are forwarded without fallback; unknown models use the default native-size policy and may reject incompatible options.
+The default is `gemini-nano-banana-2.1`; override it per request with `--model`. Precision work can select `gemini-3-pro-image`. Existing `gemini-3.1-flash-image` and `gemini-2.5-flash-image` workflows are supported. Other model IDs are forwarded without fallback; unknown models use the default native-size policy and may reject incompatible options.
 
 Gemini accepts `--quality auto` only and rejects masks. Sizes normalize to the nearest model-native aspect ratio and then resolution by pixel distance, with smaller output winning resolution ties. Presets and aspect-only sizes use 1K; `auto` leaves aspect and resolution to the model. Files retain actual output dimensions, reported in JSON. Format conversion uses sharp without resizing; native alpha transparency is not promised. Four reference images are allowed, plus an edit source; the legacy 2.5 model is limited to three inputs total by this tool.
 
@@ -235,12 +236,16 @@ Klein has no native transparency: Black Forest Labs doesn't claim it, and its VA
 
 ## Configuration
 
-Environment variables, all optional:
+CLI settings live in `config.json` next to `providers.json` and the credential file, and are managed with `imagegen config`. ImageGenCli reads no settings from environment variables.
 
-- `IMAGEGEN_CODEX_IMAGE_MODEL` — requested Codex image model (default `gpt-image-2.6-flare`); `--model` takes precedence.
-- `IMAGEGEN_CODEX_REDIRECT_URI` — Codex OAuth redirect (default `http://localhost:1455/auth/callback`).
-- `IMAGEGEN_GEMINI_IMAGE_MODEL` — Gemini image model (default `gemini-nano-banana-2.1`); `--model` takes precedence.
-- `IMAGEGEN_USAGE_LOG` — file path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds the image request ID, image tokens (`imageGeneration`), the size/quality/background actually served (`served`), and the ChatGPT plan window reported with the response (`planLimits`: plan type, active limit, and daily image allowance used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
+```sh
+imagegen config                                      # every setting and the file location
+imagegen config set usage-log ./logs/imagegen.jsonl
+imagegen config get usage-log
+imagegen config unset usage-log
+```
+
+- `usage-log` — a file path, stored as an absolute path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds the image request ID, image tokens (`imageGeneration`), the size/quality/background actually served (`served`), and the ChatGPT plan window reported with the response (`planLimits`: plan type, active limit, and daily image allowance used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
 
 Named profiles are saved in `providers.json` next to the credential file; see [Named image API endpoints](#named-image-api-endpoints).
 

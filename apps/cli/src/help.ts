@@ -70,8 +70,8 @@ Gemini provider:
   --size normalizes to model-native ratios and resolution tiers without resizing.
   auto keeps model defaults; aspect/preset requests use 1K. JSON reports actual pixels.
   PNG/JPEG/WebP output; format conversion happens locally when needed.
-  Model precedence: --model > constructor imageModel > IMAGEGEN_GEMINI_IMAGE_MODEL
-  > gemini-nano-banana-2.1. Calls are independent; use prior output as --source.
+  Model precedence: --model > constructor imageModel > gemini-nano-banana-2.1.
+  Calls are independent; use prior output as --source.
 
 Codex model requests (the backend chooses what actually runs):
   gpt-image-2.6-flare     Requested by default
@@ -84,14 +84,15 @@ Codex accepts any model ID, including made-up ones, and does not report what ran
 its Responses route rewrites these requests to gpt-image-2-codex. Use a named
 profile such as OpenRouter when a specific model matters.
 Model precedence: --model > constructor imageModel (library callers) >
-IMAGEGEN_CODEX_IMAGE_MODEL > gpt-image-2.6-flare.
+gpt-image-2.6-flare.
 JSON results report requestedModel, and servedModel per image (null unless the
 provider names one). Codex also reports served quality, size, and background, and
 may override what was requested. A Codex --mask is sent as the last edit image with a fixed
 instruction appended to the prompt; it steers the edit but does not guarantee
 untouched pixels outside it. It must match the source size, and uses one of the
 four edit-image slots.
-IMAGEGEN_USAGE_LOG=<file> appends one prompt-free JSON usage line per result.
+imagegen config set usage-log <file> appends one prompt-free JSON usage line per
+result.
 
 Codex quality requests: auto (default), low, medium, high; Flare/Sunburst IDs also
 accept xhigh and max. gpt-image-2 rejects xhigh/max. The backend may serve another.
@@ -127,6 +128,7 @@ Usage:
   imagegen models --provider <profile-name>
   imagegen skill
   imagegen skill install --target <claude|codex|skills-dir> [--target <...>] [--force]
+  imagegen config [get <key> | set <key> <value> | unset <key>]
   imagegen help [command]
   imagegen --version
 
@@ -235,6 +237,24 @@ Without install, prints SKILL.md as Markdown. Install accepts repeatable targets
 
 Install prints JSON with each path and status. Existing different content is
 preserved unless --force is passed.
+`,
+  config: `imagegen config - show or change CLI settings
+
+Usage:
+  imagegen config
+  imagegen config get <key>
+  imagegen config set <key> <value>
+  imagegen config unset <key>
+
+Settings are saved in config.json next to providers.json and the credential file;
+the CLI reads no settings from environment variables. Without an action, prints
+JSON with every setting (null when unset) and the file location.
+
+Keys:
+  usage-log <file>   Append one JSON line per generate/edit result: provider,
+                     model, request shape, actual dimensions, and provider usage.
+                     Prompts, image bytes, and credentials are never written.
+                     A relative path is resolved when set.
 `,
   help: `imagegen help - show human-readable usage
 

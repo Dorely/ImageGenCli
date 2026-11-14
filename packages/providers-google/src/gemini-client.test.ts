@@ -265,29 +265,24 @@ describe("Gemini transport", () => {
   it("honors configured model precedence without model substitution", async () => {
     const bytes = await fixture();
     const payloads: { model: string }[] = [];
-    vi.stubEnv("IMAGEGEN_GEMINI_IMAGE_MODEL", "gemini-3-pro-image");
     const fetchImpl: typeof fetch = async (_url, init) => {
       payloads.push(JSON.parse(String(init?.body)));
       return reply(bytes);
     };
-    try {
-      await new GeminiImageProvider(async () => "key", { fetchImpl }).generate(
-        request,
-      );
-      const provider = new GeminiImageProvider(async () => "key", {
-        fetchImpl,
-        imageModel: "gemini-3.1-flash-image",
-      });
-      await provider.generate(request);
-      await provider.generate({ ...request, model: "custom-image-model" });
-      expect(payloads.map((p) => p.model)).toEqual([
-        "gemini-3-pro-image",
-        "gemini-3.1-flash-image",
-        "custom-image-model",
-      ]);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    await new GeminiImageProvider(async () => "key", { fetchImpl }).generate(
+      request,
+    );
+    const provider = new GeminiImageProvider(async () => "key", {
+      fetchImpl,
+      imageModel: "gemini-3.1-flash-image",
+    });
+    await provider.generate(request);
+    await provider.generate({ ...request, model: "custom-image-model" });
+    expect(payloads.map((p) => p.model)).toEqual([
+      "gemini-nano-banana-2.1",
+      "gemini-3.1-flash-image",
+      "custom-image-model",
+    ]);
   });
   it("rejects unsupported options before transport", async () => {
     const fetchImpl = vi.fn();

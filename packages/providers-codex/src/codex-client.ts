@@ -103,7 +103,7 @@ export class CodexImageProvider {
     private readonly tokens: CodexTokenManager,
     options: CodexClientOptions = {},
   ) {
-    this.imageModel = options.imageModel ?? process.env["IMAGEGEN_CODEX_IMAGE_MODEL"] ?? DEFAULT_IMAGE_MODEL;
+    this.imageModel = options.imageModel ?? DEFAULT_IMAGE_MODEL;
     this.timeoutSeconds = options.timeoutSeconds ?? REQUEST_TIMEOUT_SECONDS;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }

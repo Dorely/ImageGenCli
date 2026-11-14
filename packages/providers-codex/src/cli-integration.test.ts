@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,10 @@ vi.mock("@imagegencli/providers-google", () => ({ createGeminiEntry: () => ({ pr
 
 vi.mock("@imagegencli/providers-configurable", async (original) => ({ ...await original<Record<string, unknown>>(), ProfileRepository: class { async list() { return []; } } }));
 
-const state = vi.hoisted(() => ({ payloads: [] as Record<string, unknown>[], urls: [] as string[] }));
+const state = vi.hoisted(() => ({ payloads: [] as Record<string, unknown>[], urls: [] as string[], root: "" }));
+
+// Keep config.json and providers.json in the test directory, away from the user's real settings.
+vi.mock("@imagegencli/credentials", async (original) => ({ ...await original<Record<string, unknown>>(), defaultCredentialFilePath: () => join(state.root, "tokens.json") }));
 // A one-pixel PNG fixture for byte-preserving file output.
 const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=";
 
@@ -51,12 +54,12 @@ const originalArgv = process.argv;
 
 beforeEach(async () => {
   vi.resetModules();
-  vi.stubEnv("IMAGEGEN_CODEX_IMAGE_MODEL", undefined);
   state.payloads.length = 0;
   state.urls.length = 0;
   stdout = "";
   stderr = "";
   directory = await mkdtemp(join(tmpdir(), "imagegen-cli-test-"));
+  state.root = directory;
   vi.spyOn(process.stdout, "write").mockImplementation((chunk) => { stdout += String(chunk); return true; });
   vi.spyOn(process.stderr, "write").mockImplementation((chunk) => { stderr += String(chunk); return true; });
   vi.spyOn(process, "exit").mockImplementation((code) => { throw new Error(`exit ${code}`); });
@@ -65,11 +68,13 @@ beforeEach(async () => {
 afterEach(async () => {
   process.argv = originalArgv;
   vi.restoreAllMocks();
-  vi.unstubAllEnvs();
   await rm(directory, { recursive: true, force: true });
 });
 
 async function run(args: string[]) {
+  vi.resetModules();
+  stdout = "";
+  stderr = "";
   process.argv = [process.execPath, cliEntry, ...args];
   await import(cliEntry);
 }
@@ -77,11 +82,49 @@ async function run(args: string[]) {
 describe("CLI help", () => {
   it.each([[], ["help"], ["--help"], ["help", "generate"], ["generate", "--help"], ["help", "edit"], ["edit", "--help"]])("documents models and quality usage for %j", async (...args) => {
     await run(args);
-    for (const text of ["gpt-image-2.6-flare", "gpt-image-2.6-sunburst", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "--model", "xhigh and max", "IMAGEGEN_CODEX_IMAGE_MODEL", "Examples:"]) {
+    for (const text of ["gpt-image-2.6-flare", "gpt-image-2.6-sunburst", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "--model", "xhigh and max", "imagegen config set usage-log", "Examples:"]) {
       expect(stdout).toContain(text);
     }
     expect(state.payloads).toHaveLength(0);
     expect(stderr).toBe("");
+  });
+});
+
+describe("CLI config", () => {
+  const configFile = () => join(directory, "config.json");
+
+  it("shows, sets, gets, and unsets the usage log", async () => {
+    const log = join(directory, "logs", "usage.jsonl");
+    await run(["config"]);
+    expect(JSON.parse(stdout)).toEqual({ config: { "usage-log": null }, location: configFile() });
+    await run(["config", "set", "usage-log", log]);
+    expect(JSON.parse(stdout)).toEqual({ key: "usage-log", value: log });
+    expect(JSON.parse(await readFile(configFile(), "utf8"))).toEqual({ version: 1, usageLog: log });
+    await run(["config", "get", "usage-log"]);
+    expect(JSON.parse(stdout)).toEqual({ key: "usage-log", value: log });
+    await run(["config", "unset", "usage-log"]);
+    expect(JSON.parse(stdout)).toEqual({ key: "usage-log", value: null });
+    expect(JSON.parse(await readFile(configFile(), "utf8"))).toEqual({ version: 1 });
+    expect(stderr).toBe("");
+    expect(state.payloads).toHaveLength(0);
+  });
+
+  it("stores a relative usage log path as an absolute path", async () => {
+    await run(["config", "set", "usage-log", "usage.jsonl"]);
+    expect(JSON.parse(stdout).value).toBe(resolve("usage.jsonl"));
+  });
+
+  it.each([[["config", "list"]], [["config", "get"]], [["config", "get", "model"]], [["config", "set", "usage-log", "   "]], [["config", "unset", "usage-log", "extra"]]])("rejects %j as a usage error", async (args) => {
+    await expect(run(args)).rejects.toThrow();
+    expect(JSON.parse(stderr.split("\n")[0]).error.kind).toBe("usage");
+    expect(stdout).toBe("");
+  });
+
+  it("rejects a broken config file before any provider request", async () => {
+    await writeFile(configFile(), "{ not json");
+    await expect(run(["generate", "--prompt", "Draw a bicycle", "--out", join(directory, "out.png")])).rejects.toThrow();
+    expect(JSON.parse(stderr.split("\n")[0]).error).toMatchObject({ kind: "usage", message: expect.stringContaining("config.json") });
+    expect(state.payloads).toHaveLength(0);
   });
 });
 
@@ -158,7 +201,7 @@ describe("CLI image requests", () => {
 
   it("appends a prompt-free usage line when configured", async () => {
     const log = join(directory, "logs", "usage.jsonl");
-    vi.stubEnv("IMAGEGEN_USAGE_LOG", log);
+    await writeFile(join(directory, "config.json"), JSON.stringify({ version: 1, usageLog: log }));
     await run(["generate", "--prompt", "Draw a blue bicycle", "--out", join(directory, "out.png"), "--size", "1024x1024", "--quality", "low"]);
     expect(state.urls[0]).toBe("https://chatgpt.com/backend-api/codex/images/generations");
     const lines = (await readFile(log, "utf8")).trim().split("\n");

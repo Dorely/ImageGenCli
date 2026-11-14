@@ -27,7 +27,7 @@
 
 ## Architectural Overview
 - ImageGenCli is provider-agnostic and auth-agnostic. The CLI exposes only what a calling agent needs to programmatically create images; provider and credential details stay behind narrow contracts.
-- Keep provider-specific transport details behind provider-neutral contracts. Put configuration in environment variables and local config files, never in code.
+- Keep provider-specific transport details behind provider-neutral contracts. Put configuration in the app's own local config files, managed through CLI commands; never in code or environment variables.
 - Keep credentials inside the existing provider and OAuth-token persistence boundaries. Do not copy secrets onto unrelated entities, expose them in CLI output payloads, or log API keys, authorization codes, or tokens.
 - Follow the Codex OAuth PKCE flow established in the Lorekeeper repo (`CodexAuthService`) for Codex auth. Codex image calls use the direct Codex image endpoints that the Codex app's own image tool calls.
 
