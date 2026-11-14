@@ -16,7 +16,7 @@
 | `FILEMAP.md` | This file: concise map of every source and configuration file. |
 | `LICENSE` | MIT license terms. |
 | `package.json` | Root npm workspace definition and top-level scripts. |
-| `README.md` | Developer onboarding, scripts, and architecture summary. |
+| `README.md` | User guide (providers, install, usage, setup, configuration) and development summary; also the npm package README. |
 | `tsconfig.json` | Root TypeScript project references for editor and build graph alignment. |
 | `VISION.md` | High-level product vision, MVP scope, architecture direction, and success criteria. |
 
@@ -48,6 +48,7 @@
 | `apps/cli/package.json` | CLI workspace package metadata, binary entry, dependencies, and scripts. |
 | `apps/cli/tsconfig.json` | TypeScript project settings for the CLI app. |
 | `apps/cli/scripts/bundle.mjs` | esbuild bundler producing the self-contained publishable CLI. |
+| `apps/cli/scripts/package-docs.mjs` | Prepack step copying the root README (relative links pinned to the version tag) and LICENSE into the package. |
 | `apps/cli/src/index.ts` | CLI entry point: parsing, auth, profile management, discovery, image commands, and JSON reporting. |
 | `apps/cli/src/help.ts` | Image options, profile management/discovery commands, supported provider guidance, and help examples. |
 | `apps/cli/src/usage-log.ts` | Opt-in `IMAGEGEN_USAGE_LOG` JSONL entries: request shape, dimensions, provider usage; no prompts or secrets. |

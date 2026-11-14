@@ -37,7 +37,7 @@ The release script verifies that:
 - all workspace package versions match (CLI, core, credentials, and every provider);
 - core and provider regression tests pass;
 - TypeScript builds across the project references;
-- the expected `dorely13-ai-imagegen-cli-VERSION.tgz` is produced by `npm pack`;
+- the expected `dorely13-ai-imagegen-cli-VERSION.tgz` is produced by `npm pack`, whose prepack step copies the root `README.md` and `LICENSE` into the package (README relative links point at the `vVERSION` tag on GitHub);
 - a SHA-256 checksum is written next to the tarball.
 
 Use `npm pack --workspace @dorely13/ai-imagegen-cli` directly when you only need a tarball for a quick local install test.

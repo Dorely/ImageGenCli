@@ -2,44 +2,28 @@
 
 ImageGenCli is free to use. If it saves you time, you can [buy Dorely a coffee](https://buymeacoffee.com/dorely).
 
-ImageGenCli is a provider-agnostic command-line tool for programmatic image generation. It exposes a single stable CLI surface for creating images while keeping provider and auth details behind narrow contracts.
+ImageGenCli is a provider-agnostic command-line tool for programmatic image generation. It exposes a single stable CLI surface for creating images while keeping provider and auth details behind narrow contracts. Results are JSON, so agents and scripts can drive it directly.
 
-## Current Status
+## Providers
 
-- Codex provider implemented: OAuth PKCE login via temporary localhost callback, vault/file token storage with auto-refresh, and `generate` / `edit` through the Codex image endpoints (requests `gpt-image-2.6-flare` by default, though the backend chooses what actually runs).
-- Named API profiles implemented: OpenRouter and OpenAI Images-compatible endpoints, stored-key auth, explicit model discovery, and upstream quota diagnostics.
-- Gemini provider implemented: stored API key, stateless Interactions API generation, references, independent edits, native-size normalization, and PNG/JPEG/WebP delivery.
+| Provider | Auth | Notes |
+|---|---|---|
+| [Codex](#codex) | ChatGPT login (OAuth PKCE) | Draws on the plan's daily image allowance. Requests `gpt-image-2.6-flare` by default, though the backend chooses what runs. |
+| [Gemini](#gemini) | Google AI Studio API key | Generation, references, and edits through the Interactions API. |
+| [OpenRouter and OpenAI Images-compatible endpoints](#named-image-api-endpoints) | Stored API key, or none | Named profiles with explicit model discovery and upstream quota diagnostics. |
+| [Local models through ComfyUI](#local-image-models-through-comfyui) | None | Runs on your own GPU. Built-in graph for FLUX 3 Image Klein; any other model through workflow files. |
+
+Several providers can stay configured at once.
 
 ## Install
 
-Published releases ship the `imagegen` npm package plus a matching GitHub Release tarball:
+Requires Node.js 20 or newer.
 
 ```sh
 npm install -g @dorely13/ai-imagegen-cli
 ```
 
-See [Releasing ImageGenCli](docs/releasing.md) for the version, tag, and publish workflow.
-
-## Development prerequisites
-
-- Node.js 20 or newer.
-- npm 10 or newer.
-
-## Development quick start
-
-```sh
-npm install
-npm run build
-```
-
-## Scripts
-
-```sh
-npm run dev        # Build the CLI and run it
-npm run typecheck  # Run TypeScript checks
-npm run build      # Build the CLI
-npm test           # Run core and provider package tests
-```
+This installs the `imagegen` command. Each version is also attached to its [GitHub Release](https://github.com/Dorely/ImageGenCli/releases) as a tarball with a SHA-256 checksum.
 
 ## Usage
 
@@ -51,14 +35,18 @@ imagegen generate --prompt "a lighthouse at dawn" --out ./lighthouse.png
 imagegen generate --prompt "same lighthouse, dusk" --reference ./lighthouse.png --out ./dusk.png
 imagegen generate --prompt "same lighthouse, dusk" --provider codex --out ./dusk.png
 imagegen edit --prompt "add seagulls" --source ./lighthouse.png --out ./gulls.png
+imagegen providers add <name> --api <openrouter|openai-images|comfyui> [options]
+imagegen models --provider <name>
 imagegen skill
 imagegen help [command]
 imagegen --version
 ```
 
-Each provider has its own auth namespace (`auth codex ...`, `auth gemini ...`); several can stay configured at once. `generate` and `edit` take a repeatable `--provider` flag: omit it when only one provider is configured, pass one or more names otherwise. Multi-provider runs write `<provider>-`-prefixed files and print one JSON result per provider.
+Each provider has its own auth namespace (`auth codex ...`, `auth gemini ...`, `auth <profile> ...`). `generate` and `edit` take a repeatable `--provider` flag: omit it when only one provider is configured, pass one or more names otherwise. Multi-provider runs write `<provider>-`-prefixed files and print one JSON result per provider.
 
-Codex login starts a temporary server on `localhost:1455`, opens the browser for OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth codex status --show-path`). `auth codex logout` removes them.
+Both `generate` and `edit` accept `--model <id>`. Run `imagegen help`, `imagegen help generate`, or `imagegen help edit` for every option, the model list, and examples (also available with `--help`).
+
+The tool is a passthrough: prompts and reference images come from the caller verbatim; the CLI adds no prompt content of its own, except the fixed mask instruction for a Codex `--mask` edit.
 
 ## Agent skill
 
@@ -79,9 +67,9 @@ imagegen skill install --target ./my-agent/skills
 
 `claude` installs to `~/.claude/skills/imagegen-cli/SKILL.md`; `codex` installs to `~/.agents/skills/imagegen-cli/SKILL.md`. A path target is the parent skills directory. The command prints JSON with the installed paths. Run it again after updating the npm package; if the existing skill differs, pass `--force` to replace it. The short global instruction above is enough if you prefer not to install a native skill.
 
-## Image models
+## Codex
 
-Both `generate` and `edit` accept `--model <id>`. Run `imagegen help`, `imagegen help generate`, or `imagegen help edit` for the model list and examples (also available with `--help`).
+Codex login starts a temporary server on `localhost:1455`, opens the browser for OAuth, and stores tokens in the OS credential vault (restricted file fallback; see `auth codex status --show-path`). Tokens refresh automatically. `auth codex logout` removes them.
 
 | Supported Codex model | Purpose | Quality |
 |---|---|---|
@@ -105,37 +93,7 @@ imagegen edit --format webp --source ./product.png --prompt "make the product bl
 imagegen generate --provider openrouter --model openai/gpt-image-2.6-sunburst --quality high --prompt "a product photo" --out ./product.png
 ```
 
-## Configuration
-
-- `IMAGEGEN_CODEX_IMAGE_MODEL` — optional override for the requested image model (default `gpt-image-2.6-flare`); `--model` takes precedence.
-- `IMAGEGEN_CODEX_REDIRECT_URI` — optional OAuth redirect override (default `http://localhost:1455/auth/callback`).
-- `IMAGEGEN_USAGE_LOG` — optional file path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds the image request ID, image tokens (`imageGeneration`), the size/quality/background actually served (`served`), and the ChatGPT plan window reported with the response (`planLimits`: plan type, active limit, and daily image allowance used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
-
-The tool is a passthrough: prompts and reference images come from the caller verbatim; the CLI adds no prompt content of its own, except the fixed mask instruction for a Codex `--mask` edit.
-
-## Architecture
-
-ImageGenCli follows the architecture direction in `VISION.md`:
-
-- Thin CLI command surface in `apps/cli`.
-- Provider-neutral contracts and shared types in `packages/core`.
-- One package per image provider (`packages/providers-*`), each owning its auth and transport details.
-- Machine-readable CLI output by default.
-
-## Development Notes
-
-- Keep provider-specific transport details behind provider-neutral contracts.
-- Never log or print secrets; persist credentials only inside the provider credential store.
-- Update `FILEMAP.md` whenever source files are added, removed, renamed, or significantly repurposed.
-- Read `VISION.md` and `FILEMAP.md` before making substantive changes.
-- Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a public contribution.
-- Codex auth follows the Lorekeeper repo's OAuth PKCE pattern (`CodexAuthService`); image calls use the Codex image endpoints called by the Codex app (codex-rs `codex-api/src/endpoint/images.rs`).
-
-## License
-
-ImageGenCli is open source under the [MIT License](LICENSE).
-
-## Gemini setup and image generation
+## Gemini
 
 Create an API key in [Google AI Studio](https://aistudio.google.com/apikey), then run:
 
@@ -180,11 +138,15 @@ Portable flags retain their existing meaning, with model-specific limits. OpenRo
 
 References go through OpenRouter `input_references` or OpenAI multipart edits. Editing keeps source first, followed by references. Masks are available only for OpenAI Images-compatible endpoints that implement them. Four references, an additional edit source, and counts from one to four are supported by the CLI; a particular model may accept less. Count invokes separate single-image requests; there are no automatic paid retries, model substitutions, conversational sessions, or arbitrary request templates. Requests and image downloads share a 180-second timeout per count item. See [API compatibility research](docs/configurable-api-research.md) and the packaged skill for provider/model selection.
 
-### Local image models through ComfyUI
+### Diagnosing gateway errors
+
+An HTTP 429 from a gateway can originate at the upstream model service even when your gateway has credit. Error JSON includes `statusCode`, and includes a validated `upstreamProvider` and numeric `retryAfterSeconds` when supplied. Upstream quota errors identify the upstream and distinguish its quota from gateway balance. No automatic retry or model substitution occurs; explicitly select another model with `--model` or change your profile default with `providers update <name> --model <id>` after verifying it works. Provider error bodies and credentials are never echoed.
+
+## Local image models through ComfyUI
 
 `--api comfyui` runs an image model on your own GPU through a headless [ComfyUI](https://github.com/comfyanonymous/ComfyUI) server, with no key or per-image cost. A profile, by convention `local-comfy`, holds what is fixed at configuration time: the server URL, the model, the command that starts the server, and any workflow files.
 
-#### Setup
+### Setup
 
 These steps fit any model that runs in ComfyUI.
 
@@ -219,13 +181,13 @@ These steps fit any model that runs in ComfyUI.
    imagegen generate --provider local-comfy --prompt "A lighthouse at dawn" --size wide --out ./lighthouse.png
    ```
 
-#### Daily use
+### Daily use
 
 The CLI never starts or stops the server, and generating needs it running. Run the profile's start command first (`imagegen providers show local-comfy` prints it), generate through `--provider local-comfy`, then stop the server, which keeps holding GPU memory until you do. If the server is down, the error quotes the saved command. The [packaged skill](apps/cli/skill/SKILL.md) tells agents to do this themselves: start the server when it isn't reachable, wait for it, and stop it when finished if they started it.
 
 `models --provider local-comfy` doubles as a health check, listing a model only when the server has everything it needs. Masks are rejected. Sizes accept presets, pixels, or aspect ratios (about one megapixel), are rounded to multiples of 16, and need edges from 256 to 2048 pixels. `auto` means 1024x1024 for text-to-image, and the first input's aspect at about one megapixel for edits. Count runs separate jobs with new seeds, reported under `served`. Each job has a 600-second timeout. Files are re-encoded so ComfyUI's embedded workflow never reaches the output.
 
-#### Workflow files
+### Workflow files
 
 For a model without a built-in graph, save its ComfyUI graph in API format and replace the values the CLI controls with tokens. `--workflow` handles requests with no input images, and `--edit-workflow` handles the rest. You can export API JSON from the model's template at the server's URL, or write it by hand from the node definitions at `<base-url>/object_info/<NodeClass>`.
 
@@ -250,7 +212,7 @@ For a model without a built-in graph, save its ComfyUI graph in API format and r
 
 A value that is only a token keeps its type, so seeds and sizes stay numbers. Sampling lives in the file, so only `--quality auto` applies, and `--model` must match the profile. Before queueing, the CLI checks that each node type and listed file exists on the server and names any that are missing. It saves the first image of the first output node that returned one, keeping alpha if the graph outputs it. Moving a profile back to a built-in graph takes `providers remove` and a new `providers add`.
 
-#### FLUX 3 Image Klein
+### FLUX 3 Image Klein
 
 Black Forest Labs' FLUX 3 Image Klein has a built-in graph. It needs ComfyUI v0.44 or later, and its int8 weights are built for GPUs with 8 GB or more of VRAM. Accept the [FLUX Kommunity License](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy), which limits commercial output to qualifying users and sets its own conditions on distribution and on training other models, then download about 18 GB:
 
@@ -271,6 +233,53 @@ imagegen providers add local-comfy --api comfyui --base-url http://127.0.0.1:818
 
 Klein has no native transparency: Black Forest Labs doesn't claim it, and its VAE decodes three channels. See the [packaged skill](apps/cli/skill/SKILL.md) for when to choose it and how to prompt it, and the [research notes](docs/configurable-api-research.md) for the evidence.
 
-### Diagnosing gateway errors
+## Configuration
 
-An HTTP 429 from a gateway can originate at the upstream model service even when your gateway has credit. Error JSON includes `statusCode`, and includes a validated `upstreamProvider` and numeric `retryAfterSeconds` when supplied. Upstream quota errors identify the upstream and distinguish its quota from gateway balance. No automatic retry or model substitution occurs; explicitly select another model with `--model` or change your profile default with `providers update <name> --model <id>` after verifying it works. Provider error bodies and credentials are never echoed.
+Environment variables, all optional:
+
+- `IMAGEGEN_CODEX_IMAGE_MODEL` — requested Codex image model (default `gpt-image-2.6-flare`); `--model` takes precedence.
+- `IMAGEGEN_CODEX_REDIRECT_URI` — Codex OAuth redirect (default `http://localhost:1455/auth/callback`).
+- `IMAGEGEN_GEMINI_IMAGE_MODEL` — Gemini image model (default `gemini-nano-banana-2.1`); `--model` takes precedence.
+- `IMAGEGEN_USAGE_LOG` — file path. When set, each `generate`/`edit` result appends one JSON line with the timestamp, provider, image model, requested size/quality/format/count/reference count, and per-image actual dimensions, byte size, response ID, and provider-reported `usage`. Prompts, image bytes, and credentials are never written. For Codex, `usage` holds the image request ID, image tokens (`imageGeneration`), the size/quality/background actually served (`served`), and the ChatGPT plan window reported with the response (`planLimits`: plan type, active limit, and daily image allowance used percent). A log write failure prints a JSON warning on stderr and leaves the result unchanged.
+
+Named profiles are saved in `providers.json` next to the credential file; see [Named image API endpoints](#named-image-api-endpoints).
+
+## Development
+
+Requires Node.js 20 or newer and npm 10 or newer.
+
+```sh
+npm install
+npm run build
+```
+
+```sh
+npm run dev        # Build the CLI and run it
+npm run typecheck  # Run TypeScript checks
+npm run build      # Build the CLI
+npm test           # Run core and provider package tests
+```
+
+See [Releasing ImageGenCli](docs/releasing.md) for the version, tag, and publish workflow.
+
+### Architecture
+
+ImageGenCli follows the architecture direction in `VISION.md`:
+
+- Thin CLI command surface in `apps/cli`.
+- Provider-neutral contracts and shared types in `packages/core`.
+- One package per image provider (`packages/providers-*`), each owning its auth and transport details.
+- Machine-readable CLI output by default.
+
+### Development notes
+
+- Keep provider-specific transport details behind provider-neutral contracts.
+- Never log or print secrets; persist credentials only inside the provider credential store.
+- Update `FILEMAP.md` whenever source files are added, removed, renamed, or significantly repurposed.
+- Read `VISION.md` and `FILEMAP.md` before making substantive changes.
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a public contribution.
+- Codex auth follows the Lorekeeper repo's OAuth PKCE pattern (`CodexAuthService`); image calls use the Codex image endpoints called by the Codex app (codex-rs `codex-api/src/endpoint/images.rs`).
+
+## License
+
+ImageGenCli is open source under the [MIT License](LICENSE).

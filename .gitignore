@@ -34,3 +34,7 @@ Thumbs.db
 !.vscode/extensions.json
 !.vscode/launch.json
 !.vscode/settings.json
+
+# Packaged copies of the root README and LICENSE (apps/cli/scripts/package-docs.mjs)
+apps/cli/README.md
+apps/cli/LICENSE
